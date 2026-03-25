@@ -4,6 +4,11 @@ import { compressImage, compressReceiptImage } from './lib/image-utils.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function sanitize(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[<>]/g, '').trim();
+}
+
 async function hashPin(pin) {
   const data = new TextEncoder().encode(pin);
   const buf = await crypto.subtle.digest('SHA-256', data);
@@ -59,7 +64,16 @@ export const api = {
   },
 
   async createJob(data) {
-    const job = { id: generateId(), ...data, createdAt: new Date().toISOString() };
+    const job = {
+      id: generateId(),
+      ...data,
+      name: sanitize(data.name),
+      store: sanitize(data.store),
+      storeNumber: sanitize(data.storeNumber),
+      location: sanitize(data.location),
+      fileRef: sanitize(data.fileRef),
+      createdAt: new Date().toISOString(),
+    };
     await put('jobs', job);
     return job;
   },
@@ -92,7 +106,21 @@ export const api = {
   async getItems(jobId) { return getAllByIndex('items', 'jobId', jobId); },
 
   async createItem(jobId, data) {
-    const item = { id: generateId(), jobId, ...data, createdAt: new Date().toISOString() };
+    const item = {
+      id: generateId(), jobId,
+      ...data,
+      vendor: sanitize(data.vendor),
+      materialClass: sanitize(data.materialClass),
+      description: sanitize(data.description),
+      itemNumber: sanitize(data.itemNumber),
+      fixtureBook: sanitize(data.fixtureBook),
+      section: sanitize(data.section),
+      missingParts: sanitize(data.missingParts),
+      additionalOrders: sanitize(data.additionalOrders),
+      damageNotes: sanitize(data.damageNotes),
+      notes: sanitize(data.notes),
+      createdAt: new Date().toISOString(),
+    };
     await put('items', item);
     return item;
   },
@@ -100,7 +128,11 @@ export const api = {
   async updateItem(id, data) {
     const existing = await getOne('items', id);
     if (!existing) throw new Error('Item not found');
-    const updated = { ...existing, ...data, id, jobId: existing.jobId };
+    const sanitized = { ...data };
+    for (const key of ['vendor', 'materialClass', 'description', 'itemNumber', 'fixtureBook', 'section', 'missingParts', 'additionalOrders', 'damageNotes', 'notes']) {
+      if (sanitized[key] !== undefined) sanitized[key] = sanitize(sanitized[key]);
+    }
+    const updated = { ...existing, ...sanitized, id, jobId: existing.jobId };
     await put('items', updated);
     return updated;
   },
@@ -321,9 +353,9 @@ export const api = {
   async createReceipt(jobId, data) {
     const receipt = {
       id: generateId(), jobId,
-      store: data.store || '', amount: parseFloat(data.amount) || 0,
-      date: data.date || today(), category: data.category || 'Materials',
-      notes: data.notes || '', isGas: data.isGas || false,
+      store: sanitize(data.store) || '', amount: parseFloat(data.amount) || 0,
+      date: data.date || today(), category: sanitize(data.category) || 'Materials',
+      notes: sanitize(data.notes) || '', isGas: data.isGas || false,
       items: data.items || [], submitted: data.submitted || false,
       createdAt: new Date().toISOString(),
     };
@@ -336,7 +368,11 @@ export const api = {
   async updateReceipt(id, data) {
     const existing = await getOne('receipts', id);
     if (!existing) throw new Error('Receipt not found');
-    const updated = { ...existing, ...data, id, jobId: existing.jobId };
+    const sanitized = { ...data };
+    for (const key of ['store', 'category', 'notes']) {
+      if (sanitized[key] !== undefined) sanitized[key] = sanitize(sanitized[key]);
+    }
+    const updated = { ...existing, ...sanitized, id, jobId: existing.jobId };
     if (updated.amount !== undefined) updated.amount = parseFloat(updated.amount) || 0;
     await put('receipts', updated);
     return updated;

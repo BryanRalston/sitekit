@@ -1,13 +1,72 @@
 import React from 'react';
 import { C, MF, getItemStatus } from '../tokens';
 import { Badge } from './ui';
+import { useMobile } from '../hooks/useApi';
 
 export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, groupBy, bulkMode, isSelected, onToggleSelect }) {
   const status = getItemStatus(item);
   const today = new Date().toISOString().slice(0, 10);
   const isOverdue = status === "overdue";
   const isToday = item.delDate === today && parseInt(item.qtyReceived || "0") === 0;
+  const isMobile = useMobile();
 
+  /* ── Mobile card layout ── */
+  if (isMobile) {
+    return (
+      <div onClick={() => onEdit(item)} style={{
+        padding: "10px 14px",
+        borderBottom: `1px solid ${C.borderLight}`,
+        cursor: "pointer",
+        background: isOverdue ? "rgba(248,81,73,0.05)" : "transparent",
+      }}>
+        {/* Row 1: codes + status badge */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+          {bulkMode && (
+            <div onClick={e => { e.stopPropagation(); onToggleSelect(item.id); }}
+              style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${isSelected ? C.accent : C.faint}`,
+                background: isSelected ? C.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center",
+                minWidth: 20, flexShrink: 0 }}>
+              {isSelected && <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>}
+            </div>
+          )}
+          <span style={{ ...MF, color: C.accent, fontSize: 11, fontWeight: 600 }}>{item.itemNumber || "---"}</span>
+          {item.materialClass && <span style={{ ...MF, fontSize: 9, color: C.faint }}>· {item.materialClass}</span>}
+          {item.fixtureBook && <span style={{ ...MF, fontSize: 9, color: C.muted }}>· {item.fixtureBook}</span>}
+          <div style={{ marginLeft: "auto" }}>
+            <Badge status={status} />
+          </div>
+        </div>
+
+        {/* Row 2: description */}
+        <div style={{ fontSize: 13, color: C.text, lineHeight: 1.4, marginBottom: 4 }}>
+          {item.description || "No description"}
+        </div>
+
+        {/* Row 3: quantities + date + flags */}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", fontSize: 11, color: C.muted }}>
+          {showQtyCol && <span>Ord: {item.qtyOrdered || "---"}</span>}
+          <span>Rec: {item.qtyReceived || "---"}</span>
+          {item.delDate && <span>{isToday ? <span style={{color: C.blue, fontWeight: 700}}>TODAY</span> : item.delDate}</span>}
+          <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
+            {item.damaged && <span>🔴</span>}
+            {item.missingParts && <span>⚠️</span>}
+            {item.additionalOrders && <span>📦</span>}
+            {item.hasPhoto && <span>📷</span>}
+          </div>
+        </div>
+
+        {/* Section/vendor context */}
+        {groupBy === "vendor" && item.section && (
+          <div style={{ fontSize: 10, color: C.teal, marginTop: 3 }}>§ {item.section}</div>
+        )}
+        {groupBy === "section" && item.vendor && (
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{item.vendor}</div>
+        )}
+      </div>
+    );
+  }
+
+  /* ── Desktop grid layout ── */
   const cols = showQtyCol
     ? "60px 55px 90px 1fr 60px 60px 75px 85px 95px"
     : "60px 55px 90px 1fr 60px 75px 85px 95px";

@@ -7,11 +7,22 @@ import VisualRefTab from './components/VisualRefTab';
 import ReceiptsTab from './components/ReceiptsTab';
 import PinGate from './components/PinGate';
 import Tutorial, { TutorialPrompt } from './components/Tutorial';
+import { ToastProvider, useToast } from './components/Toast';
+import { SkeletonList } from './components/Skeleton';
 import { api } from './api';
 import { useMobile } from './hooks/useApi';
 import { getOne, put } from './db';
 
 export default function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  );
+}
+
+function AppInner() {
+  const { toast, confirm } = useToast();
   const [unlocked, setUnlocked] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [activeJobId, setActiveJobId] = useState(null);
@@ -97,8 +108,9 @@ export default function App() {
       await loadJobs();
       setActiveJobId(created.id);
       setActiveTab("fixtures");
+      toast.success("Job created");
     } catch (err) {
-      alert("Failed to create job: " + err.message);
+      toast.error("Failed to create job: " + err.message);
     }
   };
 
@@ -109,8 +121,9 @@ export default function App() {
       if (activeJobId === jobId) {
         setActiveJobId(remaining.length > 0 ? remaining[0].id : null);
       }
+      toast.success("Job deleted");
     } catch (err) {
-      alert("Failed to delete job: " + err.message);
+      toast.error("Failed to delete job: " + err.message);
     }
   };
 
@@ -319,11 +332,8 @@ export default function App() {
             {/* Tab content */}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {jobLoading ? (
-                <div style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                  color: C.muted, fontSize: 13
-                }}>
-                  Loading job data...
+                <div style={{ flex: 1, overflowY: "auto" }}>
+                  <SkeletonList count={10} />
                 </div>
               ) : (
                 <>

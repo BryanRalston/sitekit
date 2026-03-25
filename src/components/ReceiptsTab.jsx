@@ -4,6 +4,7 @@ import { Btn } from './ui';
 import { useMobile } from '../hooks/useApi';
 import { api } from '../api';
 import ReceiptModal from './ReceiptModal';
+import { useToast } from './Toast';
 
 // Category color definitions (pastel bg + dark text)
 export const CATEGORIES = {
@@ -36,6 +37,7 @@ export default function ReceiptsTab({ job, onRefresh }) {
   const [collapsedStores, setCollapsedStores] = useState(new Set());
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const isMobile = useMobile();
+  const { toast, confirm: toastConfirm } = useToast();
 
   const loadReceipts = useCallback(async () => {
     try {
@@ -62,7 +64,7 @@ export default function ReceiptsTab({ job, onRefresh }) {
       await api.toggleSubmitted(receipt.id);
       await loadReceipts();
     } catch (err) {
-      alert('Toggle failed: ' + err.message);
+      toast.error('Toggle failed: ' + err.message);
     }
   };
 
@@ -70,8 +72,9 @@ export default function ReceiptsTab({ job, onRefresh }) {
     try {
       await api.markAllSubmitted(job.id);
       await loadReceipts();
+      toast.success('All receipts marked submitted');
     } catch (err) {
-      alert('Mark all submitted failed: ' + err.message);
+      toast.error('Mark all submitted failed: ' + err.message);
     }
   };
 
@@ -479,13 +482,15 @@ export default function ReceiptsTab({ job, onRefresh }) {
           onSave={handleRefresh}
           onClose={() => setEditReceipt(null)}
           onDelete={editReceipt?.id ? async () => {
-            if (!confirm('Delete this receipt?')) return;
+            const yes = await toastConfirm('Delete this receipt?', { confirmLabel: 'Delete', dangerous: true });
+            if (!yes) return;
             try {
               await api.deleteReceipt(editReceipt.id);
               setEditReceipt(null);
               await handleRefresh();
+              toast.success('Receipt deleted');
             } catch (err) {
-              alert('Delete failed: ' + err.message);
+              toast.error('Delete failed: ' + err.message);
             }
           } : undefined}
         />

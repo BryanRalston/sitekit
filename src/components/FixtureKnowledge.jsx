@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { C, TF, MF } from '../tokens';
 import { Btn, Inp } from './ui';
 import { api } from '../api';
+import { useToast } from './Toast';
 
 const TYPE_ICONS = {
   tip: '💡',
@@ -22,6 +23,7 @@ export default function FixtureKnowledge({ itemNumber, compact }) {
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("tip");
   const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!itemNumber) return;
@@ -45,7 +47,7 @@ export default function FixtureKnowledge({ itemNumber, compact }) {
       setNoteText("");
       setShowAdd(false);
     } catch (err) {
-      alert("Failed to save tip: " + err.message);
+      toast.error("Failed to save tip: " + err.message);
     } finally {
       setSaving(false);
     }

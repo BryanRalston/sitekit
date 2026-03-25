@@ -2,15 +2,40 @@
 const DB_NAME = 'sitekit';
 const DB_VERSION = 1;
 
+// Schema versioning guide:
+// To add a new object store or index in a future version:
+// 1. Increment DB_VERSION
+// 2. Add migration logic in onupgradeneeded that checks e.oldVersion
+// 3. Only create/modify stores that are new in that version
+//
+// Example for version 2:
+// if (e.oldVersion < 2) {
+//   // Add new store or index
+//   const store = db.createObjectStore('new_store', { keyPath: 'id' });
+// }
+
 let _db = null;
 
 /**
  * Open (or return cached) IndexedDB connection.
+ * Includes error recovery for corruption and version conflicts.
  */
 export function openDB() {
   if (_db) return Promise.resolve(_db);
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    let req;
+    try {
+      req = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (err) {
+      console.error('SiteKit: Failed to open database —', err.message);
+      reject(new Error('Could not open the SiteKit database. Try closing other tabs or clearing site data.'));
+      return;
+    }
+
+    req.onblocked = () => {
+      // Another tab has the DB open with an older version
+      console.warn('SiteKit database upgrade blocked — close other tabs');
+    };
 
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
@@ -77,7 +102,11 @@ export function openDB() {
       resolve(_db);
     };
 
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      const err = req.error;
+      console.error('SiteKit: Database error —', err?.message || 'unknown error');
+      reject(new Error('Could not open the SiteKit database. ' + (err?.message || 'Try clearing site data and reloading.')));
+    };
   });
 }
 

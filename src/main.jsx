@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Global styles
 const style = document.createElement('style');
@@ -15,6 +16,25 @@ style.textContent = `
   @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
   .fade-in { animation: fadeIn 0.2s ease forwards; }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(16px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .slide-up { animation: slideUp 0.2s ease forwards; }
+  .slide-in { animation: slideIn 0.2s ease forwards; }
+  .skeleton { animation: pulse 1.5s ease-in-out infinite; background: #1c2333; border-radius: 6px; }
   @media print {
     .no-print { display: none !important; }
     body { background: white; color: black; }
@@ -29,5 +49,9 @@ style.textContent = `
 document.head.appendChild(style);
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode><App /></React.StrictMode>
+  <React.StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </React.StrictMode>
 );

@@ -4,8 +4,10 @@ import { Btn } from './ui';
 import DeptPanel from './DeptPanel';
 import ReferenceBrowser from './ReferenceBrowser';
 import { api } from '../api';
+import { useToast } from './Toast';
 
 export default function VisualRefTab({ job, onRefresh }) {
+  const { toast } = useToast();
   const [showNewDept, setShowNewDept] = useState(false);
   const [newDeptName, setNewDeptName] = useState("");
   const [showRefBrowser, setShowRefBrowser] = useState(false);
@@ -34,7 +36,7 @@ export default function VisualRefTab({ job, onRefresh }) {
       setShowNewDept(false);
       onRefresh();
     } catch (err) {
-      alert("Failed to create department: " + err.message);
+      toast.error("Failed to create department: " + err.message);
     }
   };
 

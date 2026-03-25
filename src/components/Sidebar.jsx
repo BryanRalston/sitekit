@@ -3,29 +3,66 @@ import { C, TF, MF, getItemStatus } from '../tokens';
 import { Btn, Inp, Modal } from './ui';
 import { api } from '../api';
 import ReceiptLogImport from './ReceiptLogImport';
+import { useToast } from './Toast';
+
+function validateNewJob(f) {
+  const errors = {};
+  if (!f.name.trim()) errors.name = "Job name is required";
+  else if (f.name.trim().length < 2) errors.name = "Job name must be at least 2 characters";
+  else if (f.name.trim().length > 100) errors.name = "Job name must be 100 characters or less";
+  if (!f.store.trim()) errors.store = "Store is required";
+  if (f.storeNumber && f.storeNumber.length > 10) errors.storeNumber = "Store number must be 10 characters or less";
+  else if (f.storeNumber && !/^[a-zA-Z0-9]*$/.test(f.storeNumber)) errors.storeNumber = "Store number must be letters and numbers only";
+  if (f.location && f.location.length > 200) errors.location = "Location must be 200 characters or less";
+  if (f.date && isNaN(Date.parse(f.date))) errors.date = "Please enter a valid date";
+  return errors;
+}
+
+const fieldError = (msg) => msg ? (
+  <div style={{ color: C.red, fontSize: 11, marginTop: 3 }}>{msg}</div>
+) : null;
 
 export function NewJobModal({ onSave, onClose }) {
   const [f, setF] = useState({
     name: "", store: "", storeNumber: "", location: "",
     fileRef: "", date: new Date().toISOString().slice(0, 10)
   });
-  const s = k => v => setF(p => ({ ...p, [k]: v }));
+  const [touched, setTouched] = useState({});
+  const s = k => v => { setF(p => ({ ...p, [k]: v })); setTouched(p => ({ ...p, [k]: true })); };
+  const errors = validateNewJob(f);
+  const hasErrors = Object.keys(errors).length > 0;
+  const errBorder = (field) => touched[field] && errors[field] ? { border: `1px solid ${C.red}`, borderRadius: 6 } : {};
   return (
     <Modal title="New Job" onClose={onClose} width={480}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Inp label="Job Name *" value={f.name} onChange={s("name")} placeholder="TJ MAXX - Hybla Valley Remodel" />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Inp label="Store / Chain *" value={f.store} onChange={s("store")} placeholder="TJ MAXX" />
-          <Inp label="Store #" value={f.storeNumber} onChange={s("storeNumber")} placeholder="0092" mono />
+        <div>
+          <div style={errBorder("name")}><Inp label="Job Name *" value={f.name} onChange={s("name")} placeholder="TJ MAXX - Hybla Valley Remodel" /></div>
+          {touched.name && fieldError(errors.name)}
         </div>
-        <Inp label="Location" value={f.location} onChange={s("location")} placeholder="Hybla Valley, VA" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <div style={errBorder("store")}><Inp label="Store / Chain *" value={f.store} onChange={s("store")} placeholder="TJ MAXX" /></div>
+            {touched.store && fieldError(errors.store)}
+          </div>
+          <div>
+            <div style={errBorder("storeNumber")}><Inp label="Store #" value={f.storeNumber} onChange={s("storeNumber")} placeholder="0092" mono /></div>
+            {touched.storeNumber && fieldError(errors.storeNumber)}
+          </div>
+        </div>
+        <div>
+          <div style={errBorder("location")}><Inp label="Location" value={f.location} onChange={s("location")} placeholder="Hybla Valley, VA" /></div>
+          {touched.location && fieldError(errors.location)}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Inp label="File Reference" value={f.fileRef} onChange={s("fileRef")} placeholder="T0092Rem" mono />
-          <Inp label="Date" type="date" value={f.date} onChange={s("date")} />
+          <div>
+            <div style={errBorder("date")}><Inp label="Date" type="date" value={f.date} onChange={s("date")} /></div>
+            {touched.date && fieldError(errors.date)}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn variant="primary" disabled={!f.name.trim() || !f.store.trim()} onClick={() => onSave(f)}>Create Job</Btn>
+          <Btn variant="primary" disabled={hasErrors} onClick={() => { setTouched({ name: true, store: true, storeNumber: true, location: true, date: true }); if (!hasErrors) onSave(f); }}>Create Job</Btn>
         </div>
       </div>
     </Modal>
@@ -104,15 +141,17 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
   const [showNewJob, setShowNewJob] = useState(false);
   const [showChangePin, setShowChangePin] = useState(false);
   const [showReceiptImport, setShowReceiptImport] = useState(false);
+  const { toast, confirm: toastConfirm } = useToast();
 
   const handleNewJob = (data) => {
     onNewJob(data);
     setShowNewJob(false);
   };
 
-  const handleDelete = (e, jobId) => {
+  const handleDelete = async (e, jobId) => {
     e.stopPropagation();
-    if (confirm("Delete this job and all its data?")) {
+    const yes = await toastConfirm("Delete this job and all its data?", { confirmLabel: "Delete", dangerous: true });
+    if (yes) {
       onDeleteJob(jobId);
     }
   };
@@ -127,8 +166,9 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       a.download = `sitekit-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success("Backup downloaded");
     } catch (err) {
-      alert('Export failed: ' + err.message);
+      toast.error('Export failed: ' + err.message);
     }
   };
 

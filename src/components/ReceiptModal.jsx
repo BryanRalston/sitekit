@@ -3,10 +3,23 @@ import { C, MF } from '../tokens';
 import { Btn, Inp, Modal, Toggle } from './ui';
 import { api } from '../api';
 import { CATEGORIES } from './ReceiptsTab';
+import { useToast } from './Toast';
 
 const CATEGORY_LIST = ['Materials', 'Tools', 'Gas', 'Permits', 'Meals', 'Rental', 'Other'];
 
+function validateReceipt(f) {
+  const errors = {};
+  if (!f.store.trim()) errors.store = "Store is required";
+  if (!f.amount || f.amount.trim() === '') errors.amount = "Amount is required";
+  else if (isNaN(parseFloat(f.amount))) errors.amount = "Amount must be a valid number";
+  else if (parseFloat(f.amount) <= 0) errors.amount = "Amount must be greater than zero";
+  if (!f.date) errors.date = "Date is required";
+  else if (isNaN(Date.parse(f.date))) errors.date = "Please enter a valid date";
+  return errors;
+}
+
 export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete }) {
+  const { toast } = useToast();
   const isEditing = !!receipt;
   const fileRef = useRef(null);
 
@@ -23,6 +36,9 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState({});
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState(null); // null | { store, amount, date, filled: [] }
 
   // Load store names for autocomplete
   useEffect(() => {
@@ -55,16 +71,110 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
     const file = e.target.files?.[0];
     if (!file) return;
     setPhotoFile(file);
+    setOcrResult(null);
     const reader = new FileReader();
     reader.onload = () => setPhotoPreview(reader.result);
     reader.readAsDataURL(file);
   };
 
-  const handleSave = async () => {
-    if (!f.amount || parseFloat(f.amount) <= 0) {
-      alert('Amount is required');
-      return;
+  const runOCR = async (imageDataUrl) => {
+    // Dynamically load Tesseract.js from CDN
+    if (!window.Tesseract) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      document.head.appendChild(script);
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+      });
     }
+    const worker = await window.Tesseract.createWorker('eng');
+    const result = await worker.recognize(imageDataUrl);
+    await worker.terminate();
+    return result.data.text;
+  };
+
+  const parseReceiptText = (text) => {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+    // Extract amount: look for TOTAL, AMOUNT DUE, etc. followed by dollar amount
+    let amount = '';
+    const totalRe = /(?:total|amount\s*due|balance|grand\s*total)[:\s]*\$?([\d,]+\.\d{2})/i;
+    const reversed = [...lines].reverse();
+    for (const line of reversed) {
+      const m = line.match(totalRe);
+      if (m) { amount = m[1].replace(/,/g, ''); break; }
+    }
+    // Fallback: largest dollar amount
+    if (!amount) {
+      const amounts = text.match(/\$?([\d,]+\.\d{2})/g) || [];
+      const parsed = amounts.map(a => parseFloat(a.replace(/[$,]/g, ''))).filter(n => n > 0 && n < 10000);
+      if (parsed.length) amount = Math.max(...parsed).toFixed(2);
+    }
+
+    // Extract date: MM/DD/YYYY or MM-DD-YYYY
+    let date = '';
+    const dateRe = /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/;
+    const dateMatch = text.match(dateRe);
+    if (dateMatch) {
+      const [, mm, dd, yy] = dateMatch;
+      const year = yy.length === 2 ? '20' + yy : yy;
+      date = `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    }
+
+    // Extract store: first substantial line
+    let store = '';
+    for (const line of lines) {
+      if (line.length > 3 && line.length < 40 && /[a-zA-Z]{2,}/.test(line) && !/^\d+$/.test(line) && !/phone|tel|fax|www|http/i.test(line)) {
+        store = line;
+        break;
+      }
+    }
+
+    return { store, amount, date };
+  };
+
+  const handleOCR = async () => {
+    if (!photoPreview) return;
+    setOcrLoading(true);
+    setOcrResult(null);
+    try {
+      const ocrText = await runOCR(photoPreview);
+      const parsed = parseReceiptText(ocrText);
+      const filled = [];
+
+      // Auto-fill only empty fields
+      if (parsed.store && !f.store.trim()) {
+        set('store')(parsed.store);
+        filled.push('store');
+      }
+      if (parsed.amount && !f.amount.trim()) {
+        set('amount')(parsed.amount);
+        filled.push('amount');
+      }
+      if (parsed.date && f.date === new Date().toISOString().slice(0, 10)) {
+        set('date')(parsed.date);
+        filled.push('date');
+      }
+
+      setOcrResult({ ...parsed, filled });
+    } catch (err) {
+      setOcrResult({ error: err.message, filled: [] });
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const receiptErrors = validateReceipt(f);
+  const hasReceiptErrors = Object.keys(receiptErrors).length > 0;
+  const receiptErrBorder = (field) => touched[field] && receiptErrors[field] ? `1px solid ${C.red}` : `1px solid ${C.border}`;
+  const receiptFieldError = (field) => touched[field] && receiptErrors[field] ? (
+    <div style={{ color: C.red, fontSize: 11, marginTop: 3 }}>{receiptErrors[field]}</div>
+  ) : null;
+
+  const handleSave = async () => {
+    setTouched({ store: true, amount: true, date: true });
+    if (hasReceiptErrors) return;
     setSaving(true);
     try {
       const payload = {
@@ -93,7 +203,7 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
       await onSave();
       onClose();
     } catch (err) {
-      alert('Save failed: ' + err.message);
+      toast.error('Save failed: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -108,25 +218,26 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
         {/* Store with autocomplete */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
-            Store
+            Store *
           </label>
           <input
             type="text"
             list="store-names"
             value={f.store}
-            onChange={e => set('store')(e.target.value)}
+            onChange={e => { set('store')(e.target.value); setTouched(p => ({ ...p, store: true })); }}
             placeholder="Home Depot, Lowe's..."
             style={{
-              width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6,
+              width: '100%', background: C.bg, border: receiptErrBorder('store'), borderRadius: 6,
               color: C.text, padding: '8px 12px', fontSize: 13, outline: 'none', minHeight: 44,
               boxSizing: 'border-box',
             }}
-            onFocus={e => { e.target.style.borderColor = C.accent; }}
-            onBlur={e => { e.target.style.borderColor = C.border; }}
+            onFocus={e => { if (!receiptErrors.store) e.target.style.borderColor = C.accent; }}
+            onBlur={e => { setTouched(p => ({ ...p, store: true })); if (!receiptErrors.store) e.target.style.borderColor = C.border; }}
           />
           <datalist id="store-names">
             {storeNames.map(name => <option key={name} value={name} />)}
           </datalist>
+          {receiptFieldError('store')}
         </div>
 
         {/* Amount + Date row */}
@@ -145,21 +256,25 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
                 step="0.01"
                 min="0"
                 value={f.amount}
-                onChange={e => set('amount')(e.target.value)}
+                onChange={e => { set('amount')(e.target.value); setTouched(p => ({ ...p, amount: true })); }}
                 placeholder="0.00"
                 style={{
-                  width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6,
+                  width: '100%', background: C.bg, border: receiptErrBorder('amount'), borderRadius: 6,
                   color: C.text, padding: '8px 12px 8px 28px', fontSize: 18, fontWeight: 700,
                   outline: 'none', minHeight: 44, boxSizing: 'border-box',
                   ...MF,
                 }}
-                onFocus={e => { e.target.style.borderColor = C.accent; }}
-                onBlur={e => { e.target.style.borderColor = C.border; }}
+                onFocus={e => { if (!receiptErrors.amount) e.target.style.borderColor = C.accent; }}
+                onBlur={e => { setTouched(p => ({ ...p, amount: true })); if (!receiptErrors.amount) e.target.style.borderColor = C.border; }}
                 autoFocus
               />
             </div>
+            {receiptFieldError('amount')}
           </div>
-          <Inp label="Date" type="date" value={f.date} onChange={set('date')} />
+          <div>
+            <Inp label="Date *" type="date" value={f.date} onChange={v => { set('date')(v); setTouched(p => ({ ...p, date: true })); }} />
+            {receiptFieldError('date')}
+          </div>
         </div>
 
         {/* Category buttons */}
@@ -218,9 +333,51 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
             onChange={handlePhotoCapture}
             style={{ display: 'none' }}
           />
-          <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current?.click()}>
-            {photoPreview ? 'Replace Photo' : 'Capture Photo'}
-          </Btn>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current?.click()}>
+              {photoPreview ? 'Replace Photo' : 'Capture Photo'}
+            </Btn>
+            {photoPreview && !ocrLoading && (
+              <Btn variant="teal" size="sm" icon="🔍" onClick={handleOCR}>
+                Scan Receipt
+              </Btn>
+            )}
+            {ocrLoading && (
+              <span style={{ fontSize: 12, color: C.teal, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{
+                  display: 'inline-block', width: 14, height: 14, border: `2px solid ${C.tealBorder}`,
+                  borderTopColor: C.teal, borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }} />
+                Scanning...
+              </span>
+            )}
+          </div>
+          {/* OCR result feedback */}
+          {ocrResult && !ocrResult.error && ocrResult.filled.length > 0 && (
+            <div style={{
+              padding: '6px 12px', background: C.tealDim, border: `1px solid ${C.tealBorder}`,
+              borderRadius: 6, fontSize: 11, color: C.teal, fontWeight: 600,
+            }}>
+              OCR filled: {ocrResult.filled.join(', ')}
+            </div>
+          )}
+          {ocrResult && !ocrResult.error && ocrResult.filled.length === 0 && (
+            <div style={{
+              padding: '6px 12px', background: C.yellowDim, border: `1px solid ${C.yellowBorder}`,
+              borderRadius: 6, fontSize: 11, color: C.yellow,
+            }}>
+              OCR complete — no new fields to fill (all fields already have values)
+            </div>
+          )}
+          {ocrResult && ocrResult.error && (
+            <div style={{
+              padding: '6px 12px', background: C.redDim, border: `1px solid ${C.redBorder}`,
+              borderRadius: 6, fontSize: 11, color: C.red,
+            }}>
+              OCR failed: {ocrResult.error}
+            </div>
+          )}
         </div>
 
         {/* Items section (OCR parsed, read-only) */}
@@ -269,7 +426,7 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
             </Btn>
           )}
           <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-          <Btn variant="primary" onClick={handleSave} disabled={saving}>
+          <Btn variant="primary" onClick={handleSave} disabled={saving || hasReceiptErrors}>
             {saving ? 'Saving...' : (isEditing ? 'Save' : 'Add Receipt')}
           </Btn>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { C, MF, TF } from '../tokens';
-import { Modal, Btn } from './ui';
+import { Modal, Btn, Inp } from './ui';
 import { api } from '../api';
 
 export default function ImportModal({ jobId, onImport, onClose }) {
@@ -13,7 +13,56 @@ export default function ImportModal({ jobId, onImport, onClose }) {
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editForm, setEditForm] = useState({});
   const fileInputRef = useRef();
+
+  const startEdit = (index) => {
+    const item = preview[index];
+    setEditingIndex(index);
+    setEditForm({
+      vendor: item.vendor || '',
+      materialClass: item.materialClass || item.material_class || '',
+      itemNumber: item.itemNumber || item.item_number || '',
+      description: item.description || '',
+      qtyOrdered: item.qtyOrdered || item.qty_ordered || '',
+      fixtureBook: item.fixtureBook || item.fixture_book || '',
+      section: item.section || '',
+    });
+  };
+
+  const saveEdit = () => {
+    if (editingIndex === null) return;
+    setPreview(prev => prev.map((item, i) =>
+      i === editingIndex ? { ...item, ...editForm } : item
+    ));
+    setEditingIndex(null);
+    setEditForm({});
+  };
+
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setEditForm({});
+  };
+
+  const deletePreviewItem = (index) => {
+    setPreview(prev => prev.filter((_, i) => i !== index));
+    setEditingIndex(null);
+    setEditForm({});
+  };
+
+  const addSkippedManually = (lineIndex) => {
+    const line = skipped[lineIndex];
+    const lineText = typeof line === 'string' ? line : line.text || JSON.stringify(line);
+    setPreview(prev => [...prev, {
+      vendor: '', materialClass: '', itemNumber: '', description: lineText,
+      qtyOrdered: '', fixtureBook: '', section: '',
+    }]);
+    setSkipped(prev => prev.filter((_, i) => i !== lineIndex));
+    // Open edit on the newly added item
+    const newIndex = preview.length;
+    setTimeout(() => startEdit(newIndex), 50);
+  };
 
   const handleFileUpload = async (file) => {
     setError("");
@@ -211,45 +260,125 @@ export default function ImportModal({ jobId, onImport, onClose }) {
               <div style={{
                 marginBottom: 10, padding: 10, background: C.yellowDim,
                 border: `1px solid ${C.yellowBorder}`, borderRadius: 6,
-                maxHeight: 120, overflowY: "auto"
+                maxHeight: 160, overflowY: "auto"
               }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: C.yellow, marginBottom: 6 }}>SKIPPED LINES:</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.yellow, marginBottom: 6 }}>
+                  SKIPPED LINES ({skipped.length}):
+                </div>
                 {skipped.map((line, i) => (
-                  <div key={i} style={{ fontSize: 10, color: C.muted, ...MF, marginBottom: 2, lineHeight: 1.5 }}>
-                    {typeof line === 'string' ? line : line.text || JSON.stringify(line)}
+                  <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    fontSize: 10, color: C.muted, marginBottom: 4, lineHeight: 1.5,
+                    padding: "3px 0", borderBottom: i < skipped.length - 1 ? `1px solid ${C.yellowBorder}` : "none",
+                  }}>
+                    <span style={{ ...MF, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {typeof line === 'string' ? line : line.text || JSON.stringify(line)}
+                    </span>
+                    <button onClick={() => addSkippedManually(i)} style={{
+                      padding: "2px 8px", borderRadius: 4, fontSize: 9, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                      background: C.accentDim, color: C.accent, border: `1px solid ${C.accentBorder}`,
+                      whiteSpace: "nowrap",
+                    }}>
+                      + Add Manually
+                    </button>
                   </div>
                 ))}
               </div>
             )}
 
             {/* Preview table */}
-            <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6 }}>
+            <div style={{ maxHeight: 300, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 6 }}>
               <div style={{
                 display: "grid", gridTemplateColumns: "70px 60px 1fr 60px 80px",
                 padding: "5px 12px", background: C.bg, fontSize: 9, fontWeight: 700,
                 color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em",
-                position: "sticky", top: 0
+                position: "sticky", top: 0, zIndex: 2
               }}>
                 <span>Item #</span><span>Fixt. Bk</span><span>Description</span><span>Qty</span><span>Section</span>
               </div>
               {preview.map((item, i) => (
-                <div key={i} style={{
-                  display: "grid", gridTemplateColumns: "70px 60px 1fr 60px 80px",
-                  padding: "5px 12px", borderTop: `1px solid ${C.borderLight}`,
-                  background: i % 2 === 0 ? C.card : "transparent", fontSize: 11
-                }}>
-                  <span style={{ ...MF, color: C.accent, fontSize: 10 }}>{item.itemNumber || item.item_number || "---"}</span>
-                  <span style={{ ...MF, color: C.muted, fontSize: 10 }}>{item.fixtureBook || item.fixture_book || "---"}</span>
-                  <span style={{ color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {item.description}
-                  </span>
-                  <span style={{ color: C.muted }}>{item.qtyOrdered || item.qty_ordered || "---"}</span>
-                  <span style={{ color: C.teal, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {item.section || "---"}
-                  </span>
+                <div key={i}>
+                  {/* Normal row — click to edit */}
+                  <div
+                    onClick={() => editingIndex === i ? cancelEdit() : startEdit(i)}
+                    style={{
+                      display: "grid", gridTemplateColumns: "70px 60px 1fr 60px 80px",
+                      padding: "5px 12px", borderTop: `1px solid ${C.borderLight}`,
+                      background: editingIndex === i ? C.accentDim : i % 2 === 0 ? C.card : "transparent",
+                      fontSize: 11, cursor: "pointer", transition: "background 0.15s",
+                    }}
+                    onMouseEnter={e => { if (editingIndex !== i) e.currentTarget.style.background = C.cardHover; }}
+                    onMouseLeave={e => { if (editingIndex !== i) e.currentTarget.style.background = editingIndex === i ? C.accentDim : i % 2 === 0 ? C.card : "transparent"; }}
+                  >
+                    <span style={{ ...MF, color: C.accent, fontSize: 10 }}>{item.itemNumber || item.item_number || "---"}</span>
+                    <span style={{ ...MF, color: C.muted, fontSize: 10 }}>{item.fixtureBook || item.fixture_book || "---"}</span>
+                    <span style={{ color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.description}
+                    </span>
+                    <span style={{ color: C.muted }}>{item.qtyOrdered || item.qty_ordered || "---"}</span>
+                    <span style={{ color: C.teal, fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.section || "---"}
+                    </span>
+                  </div>
+
+                  {/* Inline edit form */}
+                  {editingIndex === i && (
+                    <div style={{
+                      padding: "10px 12px", background: C.bg,
+                      borderTop: `1px solid ${C.accentBorder}`,
+                      borderBottom: `1px solid ${C.accentBorder}`,
+                    }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.accent, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                        Edit Item
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {/* Row 1: Vendor + Item # */}
+                        <EditField label="Vendor" value={editForm.vendor} onChange={v => setEditForm(f => ({ ...f, vendor: v }))} mono />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                          <EditField label="Item #" value={editForm.itemNumber} onChange={v => setEditForm(f => ({ ...f, itemNumber: v }))} mono />
+                          <EditField label="Class" value={editForm.materialClass} onChange={v => setEditForm(f => ({ ...f, materialClass: v }))} mono />
+                        </div>
+                        {/* Row 2: Description (full width) */}
+                        <div style={{ gridColumn: "1 / -1" }}>
+                          <EditField label="Description" value={editForm.description} onChange={v => setEditForm(f => ({ ...f, description: v }))} />
+                        </div>
+                        {/* Row 3: Qty + Book + Section */}
+                        <div style={{ display: "grid", gridTemplateColumns: "80px 80px 1fr", gap: 8 }}>
+                          <EditField label="Qty" value={editForm.qtyOrdered} onChange={v => setEditForm(f => ({ ...f, qtyOrdered: v }))} mono />
+                          <EditField label="Book" value={editForm.fixtureBook} onChange={v => setEditForm(f => ({ ...f, fixtureBook: v }))} mono />
+                          <EditField label="Section" value={editForm.section} onChange={v => setEditForm(f => ({ ...f, section: v }))} />
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "flex-end" }}>
+                        <button onClick={(e) => { e.stopPropagation(); deletePreviewItem(i); }} style={{
+                          padding: "4px 10px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                          cursor: "pointer", fontFamily: "inherit", marginRight: "auto",
+                          background: "transparent", color: C.red, border: `1px solid ${C.redBorder}`,
+                        }}>Delete</button>
+                        <button onClick={(e) => { e.stopPropagation(); cancelEdit(); }} style={{
+                          padding: "4px 10px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                          cursor: "pointer", fontFamily: "inherit",
+                          background: "transparent", color: C.muted, border: `1px solid ${C.border}`,
+                        }}>Cancel</button>
+                        <button onClick={(e) => { e.stopPropagation(); saveEdit(); }} style={{
+                          padding: "4px 10px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                          cursor: "pointer", fontFamily: "inherit",
+                          background: C.accent, color: "#1a1a1a", border: "none",
+                        }}>Save</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Tap-to-edit hint */}
+        {preview.length > 0 && editingIndex === null && (
+          <div style={{ fontSize: 10, color: C.faint, textAlign: "center", marginTop: -8 }}>
+            Tap any row to edit before importing
           </div>
         )}
 
@@ -262,5 +391,29 @@ export default function ImportModal({ jobId, onImport, onClose }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Compact inline edit field for the import preview */
+function EditField({ label, value, onChange, mono }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <label style={{ fontSize: 8, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+        {label}
+      </label>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 4,
+          color: C.text, padding: "4px 8px", fontSize: 11, outline: "none",
+          boxSizing: "border-box",
+          ...(mono ? MF : {}),
+        }}
+        onFocus={e => { e.target.style.borderColor = C.accent; }}
+        onBlur={e => { e.target.style.borderColor = C.border; }}
+      />
+    </div>
   );
 }

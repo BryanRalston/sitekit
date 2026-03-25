@@ -3,8 +3,23 @@ import { C, MF } from '../tokens';
 import { Modal, Inp, Btn, Toggle } from './ui';
 import FixtureKnowledge from './FixtureKnowledge';
 import { api } from '../api';
+import { useToast } from './Toast';
+
+function validateItem(f, isEditing) {
+  const errors = {};
+  // Item number is required for manual adds (new items), not for edits (which may be imports)
+  if (!isEditing && !f.itemNumber?.trim()) errors.itemNumber = "Item number is required";
+  if (!f.description?.trim()) errors.description = "Description is required";
+  if (f.qtyOrdered !== '' && f.qtyOrdered != null) {
+    const qty = Number(f.qtyOrdered);
+    if (isNaN(qty) || qty < 0) errors.qtyOrdered = "Quantity must be a positive number";
+  }
+  return errors;
+}
 
 export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
+  const isEditing = !!item;
+  const { toast } = useToast();
   const [f, setF] = useState(item || {
     vendor: "", materialClass: "", description: "", itemNumber: "", fixtureBook: "", section: "",
     qtyOrdered: "", delDate: "", showQtyOrdered: true, qtyReceived: "", dateReceived: "",
@@ -12,8 +27,15 @@ export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
   });
   const [photoPreview, setPhotoPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [touched, setTouched] = useState({});
   const fileRef = useRef();
-  const s = k => v => setF(p => ({ ...p, [k]: v }));
+  const s = k => v => { setF(p => ({ ...p, [k]: v })); setTouched(p => ({ ...p, [k]: true })); };
+  const itemErrors = validateItem(f, isEditing);
+  const hasItemErrors = Object.keys(itemErrors).length > 0;
+  const itemErrBorder = (field) => touched[field] && itemErrors[field] ? { border: `1px solid ${C.red}`, borderRadius: 6 } : {};
+  const itemFieldError = (field) => touched[field] && itemErrors[field] ? (
+    <div style={{ color: C.red, fontSize: 11, marginTop: 3 }}>{itemErrors[field]}</div>
+  ) : null;
 
   // Load existing photo if item has one
   const photoUrl = item?.photo_id ? api.getPhotoUrl(item.photo_id) : null;
@@ -37,7 +59,7 @@ export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
       const result = await api.uploadPhoto(fd);
       setF(p => ({ ...p, hasPhoto: true, photo_id: result.id }));
     } catch (err) {
-      alert("Photo upload failed: " + err.message);
+      toast.error("Photo upload failed: " + err.message);
     } finally {
       setUploading(false);
     }
@@ -66,13 +88,22 @@ export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 80px", gap: 10 }}>
               <Inp label="Vendor" value={f.vendor} onChange={s("vendor")} placeholder="ACME PLASTICS" />
               <Inp label="Material Class" value={f.materialClass} onChange={s("materialClass")} placeholder="DGS / IMPORT" mono />
-              <Inp label="Item #" value={f.itemNumber} onChange={s("itemNumber")} placeholder="ACDQ" mono />
+              <div>
+                <div style={itemErrBorder("itemNumber")}><Inp label={isEditing ? "Item #" : "Item # *"} value={f.itemNumber} onChange={s("itemNumber")} placeholder="ACDQ" mono /></div>
+                {itemFieldError("itemNumber")}
+              </div>
             </div>
-            <Inp label="Description" value={f.description} onChange={s("description")} placeholder="4.25Hx5.5 W S/H GLS" />
+            <div>
+              <div style={itemErrBorder("description")}><Inp label="Description *" value={f.description} onChange={s("description")} placeholder="4.25Hx5.5 W S/H GLS" /></div>
+              {itemFieldError("description")}
+            </div>
             <Inp label="Section / Area" value={f.section} onChange={s("section")} placeholder="TJ Smart Gondolas High Rise" />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
               <Inp label="Fixture Book" value={f.fixtureBook} onChange={s("fixtureBook")} placeholder="P85" mono />
-              <Inp label="Qty Ordered" type="number" value={f.qtyOrdered} onChange={s("qtyOrdered")} />
+              <div>
+                <div style={itemErrBorder("qtyOrdered")}><Inp label="Qty Ordered" type="number" value={f.qtyOrdered} onChange={s("qtyOrdered")} /></div>
+                {itemFieldError("qtyOrdered")}
+              </div>
               <Inp label="Del. Date" type="date" value={f.delDate} onChange={s("delDate")} />
             </div>
             <Toggle checked={f.showQtyOrdered !== false} onChange={s("showQtyOrdered")} label="Include ordered qty in report" />
@@ -155,7 +186,7 @@ export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
             : <div />}
           <div style={{ display: "flex", gap: 10 }}>
             <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-            <Btn variant="primary" onClick={() => onSave({ ...f })}>Save Item</Btn>
+            <Btn variant="primary" disabled={hasItemErrors} onClick={() => { setTouched({ itemNumber: true, description: true, qtyOrdered: true }); if (!hasItemErrors) onSave({ ...f }); }}>Save Item</Btn>
           </div>
         </div>
       </div>

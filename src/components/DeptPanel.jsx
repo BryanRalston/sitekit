@@ -3,11 +3,13 @@ import { C, TF } from '../tokens';
 import { Btn } from './ui';
 import PhotoCard from './PhotoCard';
 import { api } from '../api';
+import { useToast } from './Toast';
 
 export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDelete, onRefresh }) {
   const [open, setOpen] = useState(true);
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(dept.name);
+  const { toast, confirm: toastConfirm } = useToast();
 
   const photos = dept.photos || [];
   const done = photos.filter(p => p.completed).length;
@@ -18,19 +20,21 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
         await api.updateDepartment(dept.id, { name: draftName.trim() });
         onRefresh();
       } catch (err) {
-        alert("Rename failed: " + err.message);
+        toast.error("Rename failed: " + err.message);
       }
     }
     setRenaming(false);
   };
 
   const handleDeleteDept = async () => {
-    if (!confirm(`Delete "${dept.name}"?`)) return;
+    const yes = await toastConfirm(`Delete "${dept.name}"?`, { confirmLabel: "Delete", dangerous: true });
+    if (!yes) return;
     try {
       await api.deleteDepartment(dept.id);
       onRefresh();
+      toast.success("Department deleted");
     } catch (err) {
-      alert("Delete failed: " + err.message);
+      toast.error("Delete failed: " + err.message);
     }
   };
 
@@ -61,12 +65,14 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
   };
 
   const deletePhoto = async (photo) => {
-    if (!confirm("Delete this photo?")) return;
+    const yes = await toastConfirm("Delete this photo?", { confirmLabel: "Delete", dangerous: true });
+    if (!yes) return;
     if (photo.id) {
       try { await api.deletePhoto(photo.id); } catch {}
     }
     onUpdate({ ...dept, photos: photos.filter(p => p !== photo) });
     onRefresh();
+    toast.success("Photo deleted");
   };
 
   return (

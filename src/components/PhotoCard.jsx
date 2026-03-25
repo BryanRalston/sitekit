@@ -4,6 +4,7 @@ import { Btn, Toggle } from './ui';
 import Lightbox from './Lightbox';
 import FixturePicker from './FixturePicker';
 import { api } from '../api';
+import { useToast } from './Toast';
 
 const TAGS = ["before", "during", "after", "issue", "reference"];
 const TAG_COLORS = {
@@ -19,6 +20,7 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
   const [showLightbox, setShowLightbox] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef();
+  const { toast } = useToast();
 
   const linked = allItems.filter(i => (photo.linkedItemIds || photo.linked_item_ids || []).includes(i.id));
   const imgSrc = photo.id ? api.getPhotoUrl(photo.id) : null;
@@ -37,8 +39,9 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
       if (photo.title) fd.append("title", photo.title);
       const result = await api.uploadPhoto(fd);
       onUpdate({ ...photo, ...result, hasPhoto: true });
+      toast.success("Photo uploaded");
     } catch (err) {
-      alert("Upload failed: " + err.message);
+      toast.error("Upload failed: " + err.message);
     } finally {
       setUploading(false);
     }

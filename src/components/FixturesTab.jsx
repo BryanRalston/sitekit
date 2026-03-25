@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { C, TF, MF, STATUS, getItemStatus } from '../tokens';
 import { Btn, Toggle } from './ui';
 import { useMobile } from '../hooks/useApi';
@@ -8,8 +8,10 @@ import ItemModal from './ItemModal';
 import ImportModal from './ImportModal';
 import ReportModal from './ReportModal';
 import { api } from '../api';
+import { useToast } from './Toast';
 
 export default function FixturesTab({ job, onRefresh }) {
+  const { toast, confirm: toastConfirm } = useToast();
   const [editItem, setEditItem] = useState(null); // null = closed, {} = new, item = editing
   const [showImport, setShowImport] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -21,9 +23,27 @@ export default function FixturesTab({ job, onRefresh }) {
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(true);
+  const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week"
   const isMobile = useMobile();
 
   const items = job.items || [];
+
+  // Delivery overview computation
+  const deliveryStats = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const weekAhead = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    let overdue = 0, arrivingToday = 0, thisWeek = 0;
+    const hasAnyDates = items.some(i => i.delDate);
+    for (const item of items) {
+      if (!item.delDate) continue;
+      const rec = parseInt(item.qtyReceived || "0");
+      if (item.delDate < today && rec === 0) overdue++;
+      if (item.delDate === today) arrivingToday++;
+      if (item.delDate > today && item.delDate <= weekAhead) thisWeek++;
+    }
+    return { overdue, arrivingToday, thisWeek, hasAnyDates };
+  }, [items]);
 
   const saveItem = async (itemData) => {
     try {
@@ -34,19 +54,22 @@ export default function FixturesTab({ job, onRefresh }) {
       }
       setEditItem(null);
       onRefresh();
+      toast.success(itemData.id ? "Item updated" : "Item added");
     } catch (err) {
-      alert("Save failed: " + err.message);
+      toast.error("Save failed: " + err.message);
     }
   };
 
   const deleteItem = async (id) => {
-    if (!confirm("Delete this item?")) return;
+    const yes = await toastConfirm("Delete this item?", { confirmLabel: "Delete", dangerous: true });
+    if (!yes) return;
     try {
       await api.deleteItem(id);
       setEditItem(null);
       onRefresh();
+      toast.success("Item deleted");
     } catch (err) {
-      alert("Delete failed: " + err.message);
+      toast.error("Delete failed: " + err.message);
     }
   };
 
@@ -55,8 +78,9 @@ export default function FixturesTab({ job, onRefresh }) {
       await api.quickReceive(itemId, data);
       setQuickReceiveId(null);
       onRefresh();
+      toast.success("Item received");
     } catch (err) {
-      alert("Quick receive failed: " + err.message);
+      toast.error("Quick receive failed: " + err.message);
     }
   };
 
@@ -68,11 +92,12 @@ export default function FixturesTab({ job, onRefresh }) {
         item_ids: [...selectedIds],
         date_received: today,
       });
+      toast.success(`${selectedIds.size} items marked received`);
       setSelectedIds(new Set());
       setBulkMode(false);
       onRefresh();
     } catch (err) {
-      alert("Bulk receive failed: " + err.message);
+      toast.error("Bulk receive failed: " + err.message);
     }
   };
 
@@ -100,6 +125,14 @@ export default function FixturesTab({ job, onRefresh }) {
     }
   };
 
+  const handleDeliveryChipClick = (chip) => {
+    if (deliveryFilter === chip) {
+      setDeliveryFilter(null);
+    } else {
+      setDeliveryFilter(chip);
+    }
+  };
+
   // Filter items
   const filteredItems = items.filter(item => {
     const ql = search.toLowerCase();
@@ -111,7 +144,19 @@ export default function FixturesTab({ job, onRefresh }) {
       || (item.fixtureBook || "").toLowerCase().includes(ql)
       || (item.materialClass || "").toLowerCase().includes(ql);
     const st = filterStatus === "all" || getItemStatus(item) === filterStatus;
-    return m && st;
+
+    // Delivery filter
+    let df = true;
+    if (deliveryFilter) {
+      const today = new Date().toISOString().slice(0, 10);
+      const weekAhead = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const rec = parseInt(item.qtyReceived || "0");
+      if (deliveryFilter === "overdue") df = item.delDate && item.delDate < today && rec === 0;
+      else if (deliveryFilter === "today") df = item.delDate === today;
+      else if (deliveryFilter === "week") df = item.delDate && item.delDate > today && item.delDate <= weekAhead;
+    }
+
+    return m && st && df;
   });
 
   // Group items
@@ -317,6 +362,97 @@ export default function FixturesTab({ job, onRefresh }) {
         </div>
       )}
 
+      {/* Delivery Overview Bar */}
+      {items.length > 0 && deliveryStats.hasAnyDates && (deliveryStats.overdue > 0 || deliveryStats.arrivingToday > 0 || deliveryStats.thisWeek > 0) && (
+        <div className="no-print" style={{
+          background: C.card, border: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={() => setDeliveryOpen(v => !v)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 8,
+              padding: isMobile ? "8px 14px" : "6px 18px",
+              background: "transparent", border: "none", cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              Delivery Overview
+            </span>
+            <span style={{ fontSize: 10, color: C.faint, transform: deliveryOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+              ▼
+            </span>
+            {!deliveryOpen && deliveryStats.overdue > 0 && (
+              <span style={{ ...MF, fontSize: 10, color: C.red, fontWeight: 700, marginLeft: 4 }}>
+                {deliveryStats.overdue} overdue
+              </span>
+            )}
+          </button>
+          {deliveryOpen && (
+            <div style={{
+              display: "flex", gap: 12, padding: isMobile ? "0 14px 10px" : "0 18px 8px",
+              flexWrap: "wrap", alignItems: "center",
+            }}>
+              {/* Overdue chip */}
+              {deliveryStats.overdue > 0 && (
+                <button onClick={() => handleDeliveryChipClick("overdue")} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
+                  borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", minHeight: isMobile ? 36 : 28, transition: "all 0.15s",
+                  background: deliveryFilter === "overdue" ? C.redDim : "transparent",
+                  color: deliveryFilter === "overdue" ? C.red : C.muted,
+                  border: `1px solid ${deliveryFilter === "overdue" ? C.redBorder : C.border}`,
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.red, flexShrink: 0 }} />
+                  <span style={{ ...MF, fontSize: 13, fontWeight: 700, color: C.red }}>{deliveryStats.overdue}</span>
+                  Overdue
+                </button>
+              )}
+              {/* Arriving Today chip */}
+              {deliveryStats.arrivingToday > 0 && (
+                <button onClick={() => handleDeliveryChipClick("today")} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
+                  borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", minHeight: isMobile ? 36 : 28, transition: "all 0.15s",
+                  background: deliveryFilter === "today" ? C.blueDim : "transparent",
+                  color: deliveryFilter === "today" ? C.blue : C.muted,
+                  border: `1px solid ${deliveryFilter === "today" ? C.blueBorder : C.border}`,
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.blue, flexShrink: 0 }} />
+                  <span style={{ ...MF, fontSize: 13, fontWeight: 700, color: C.blue }}>{deliveryStats.arrivingToday}</span>
+                  Arriving Today
+                </button>
+              )}
+              {/* This Week chip */}
+              {deliveryStats.thisWeek > 0 && (
+                <button onClick={() => handleDeliveryChipClick("week")} style={{
+                  display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
+                  borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", minHeight: isMobile ? 36 : 28, transition: "all 0.15s",
+                  background: deliveryFilter === "week" ? C.accentDim : "transparent",
+                  color: deliveryFilter === "week" ? C.muted : C.muted,
+                  border: `1px solid ${deliveryFilter === "week" ? C.accentBorder : C.border}`,
+                }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.muted, flexShrink: 0 }} />
+                  <span style={{ ...MF, fontSize: 13, fontWeight: 700, color: C.text }}>{deliveryStats.thisWeek}</span>
+                  This Week
+                </button>
+              )}
+              {/* Clear filter indicator */}
+              {deliveryFilter && (
+                <button onClick={() => setDeliveryFilter(null)} style={{
+                  fontSize: 10, color: C.faint, background: "transparent", border: "none",
+                  cursor: "pointer", fontFamily: "inherit", textDecoration: "underline",
+                }}>
+                  Clear filter
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Section pills */}
       {allSections.length > 0 && groupBy === "vendor" && (
         <div style={{
@@ -347,19 +483,21 @@ export default function FixturesTab({ job, onRefresh }) {
         </div>
       )}
 
-      {/* Column headers */}
-      <div style={{
-        display: "grid", gridTemplateColumns: headerCols, padding: "6px 14px",
-        position: "sticky", top: 0, zIndex: 10, background: C.card,
-        borderBottom: `1px solid ${C.border}`, flexShrink: 0
-      }}>
-        {bulkMode && <span />}
-        {["Item #", "Class", "Fixt. Book", "Description", ...(showQtyCol ? ["Ord."] : []), "Rec'd", "Del. Date", "Flags", "Status"].map(h => (
-          <span key={h} style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-            {h}
-          </span>
-        ))}
-      </div>
+      {/* Column headers (hidden on mobile — items render as cards) */}
+      {!isMobile && (
+        <div style={{
+          display: "grid", gridTemplateColumns: headerCols, padding: "6px 14px",
+          position: "sticky", top: 0, zIndex: 10, background: C.card,
+          borderBottom: `1px solid ${C.border}`, flexShrink: 0
+        }}>
+          {bulkMode && <span />}
+          {["Item #", "Class", "Fixt. Book", "Description", ...(showQtyCol ? ["Ord."] : []), "Rec'd", "Del. Date", "Flags", "Status"].map(h => (
+            <span key={h} style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              {h}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Rows */}
       <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
