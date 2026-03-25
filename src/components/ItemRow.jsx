@@ -13,7 +13,7 @@ export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, grou
   /* ── Mobile card layout ── */
   if (isMobile) {
     return (
-      <div onClick={() => onEdit(item)} style={{
+      <div data-testid={`item-row-${item.id}`} onClick={() => onEdit(item)} style={{
         padding: "10px 14px",
         borderBottom: `1px solid ${C.borderLight}`,
         cursor: "pointer",
@@ -76,6 +76,7 @@ export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, grou
 
   return (
     <div
+      data-testid={`item-row-${item.id}`}
       onClick={() => onEdit(item)}
       style={{
         display: "grid", gridTemplateColumns: gridCols,

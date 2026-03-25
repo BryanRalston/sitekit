@@ -3,7 +3,9 @@ import { C } from '../tokens';
 import { Btn, Toggle } from './ui';
 import Lightbox from './Lightbox';
 import FixturePicker from './FixturePicker';
+import PhotoAnnotator from './PhotoAnnotator';
 import { api } from '../api';
+import { put } from '../db';
 import { useToast } from './Toast';
 
 const TAGS = ["before", "during", "after", "issue", "reference"];
@@ -19,8 +21,17 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
   const [showPicker, setShowPicker] = useState(false);
   const [showLightbox, setShowLightbox] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [annotating, setAnnotating] = useState(false);
   const fileRef = useRef();
   const { toast } = useToast();
+
+  const handleAnnotationSave = async (dataUrl) => {
+    if (photo.id) {
+      await put('blobs', { id: photo.id, data: dataUrl });
+    }
+    setAnnotating(false);
+    toast.success("Annotations saved");
+  };
 
   const linked = allItems.filter(i => (photo.linkedItemIds || photo.linked_item_ids || []).includes(i.id));
   const imgSrc = photo.id ? api.getPhotoUrl(photo.id) : null;
@@ -167,22 +178,34 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
           )}
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
             <Btn variant="ghost" size="sm" icon="🔗" onClick={() => setShowPicker(true)}>
               {linked.length > 0 ? `${linked.length} Linked` : "Link Fixtures"}
             </Btn>
+            {hasImage && imgSrc && (
+              <Btn variant="orange" size="sm" icon="✏️" onClick={() => setAnnotating(true)}>Annotate</Btn>
+            )}
             <Btn variant="danger" size="sm" onClick={onDelete} style={{ marginLeft: "auto" }}>✕</Btn>
           </div>
         </div>
       </div>
 
       {showLightbox && imgSrc && (
-        <Lightbox photo={photo} imgSrc={imgSrc} allItems={allItems} onClose={() => setShowLightbox(false)} />
+        <Lightbox photo={photo} imgSrc={imgSrc} allItems={allItems}
+          onClose={() => setShowLightbox(false)}
+          onAnnotationSave={() => { /* blob updated in Lightbox handler */ }} />
       )}
       {showPicker && (
         <FixturePicker allItems={allItems}
           linkedIds={photo.linkedItemIds || photo.linked_item_ids || []}
           onToggle={toggleLinked} onClose={() => setShowPicker(false)} />
+      )}
+      {annotating && imgSrc && (
+        <PhotoAnnotator
+          imageSrc={imgSrc}
+          onSave={handleAnnotationSave}
+          onCancel={() => setAnnotating(false)}
+        />
       )}
     </>
   );

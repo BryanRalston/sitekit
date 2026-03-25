@@ -1,9 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { C, TF, MF } from '../tokens';
 import { getItemStatus } from '../tokens';
-import { Badge } from './ui';
+import { Badge, Btn } from './ui';
+import PhotoAnnotator from './PhotoAnnotator';
+import { put } from '../db';
 
-export default function Lightbox({ photo, imgSrc, allItems, onClose }) {
+export default function Lightbox({ photo, imgSrc, allItems, onClose, onAnnotationSave }) {
+  const [annotating, setAnnotating] = useState(false);
+
+  const handleAnnotationSave = async (dataUrl) => {
+    if (photo.id) {
+      await put('blobs', { id: photo.id, data: dataUrl });
+    }
+    setAnnotating(false);
+    if (onAnnotationSave) onAnnotationSave(dataUrl);
+  };
   const linked = (photo.linkedItemIds || photo.linked_item_ids || [])
     .map(id => allItems.find(i => i.id === id))
     .filter(Boolean);
@@ -70,8 +81,19 @@ export default function Lightbox({ photo, imgSrc, allItems, onClose }) {
               {item.itemNumber} · {item.description?.slice(0, 28)}
             </span>
           ))}
+          {imgSrc && (
+            <Btn variant="orange" size="sm" icon="✏️" onClick={() => setAnnotating(true)}>Annotate</Btn>
+          )}
         </div>
       </div>
+
+      {annotating && (
+        <PhotoAnnotator
+          imageSrc={imgSrc}
+          onSave={handleAnnotationSave}
+          onCancel={() => setAnnotating(false)}
+        />
+      )}
     </div>
   );
 }

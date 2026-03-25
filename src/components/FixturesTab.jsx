@@ -7,6 +7,7 @@ import QuickReceive from './QuickReceive';
 import ItemModal from './ItemModal';
 import ImportModal from './ImportModal';
 import ReportModal from './ReportModal';
+import VirtualList from './VirtualList';
 import { api } from '../api';
 import { useToast } from './Toast';
 
@@ -286,7 +287,7 @@ export default function FixturesTab({ job, onRefresh }) {
           {/* Search */}
           <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
             <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.muted, fontSize: 14 }}>🔍</span>
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input data-testid="search-input" value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search item #, description, vendor, section, fixture book..."
               style={{
                 width: "100%", background: C.bg, border: `1px solid ${C.border}`,
@@ -301,7 +302,7 @@ export default function FixturesTab({ job, onRefresh }) {
             const cnt = f === "all" ? items.length : items.filter(i => getItemStatus(i) === f).length;
             if (f !== "all" && cnt === 0) return null;
             return (
-              <button key={f} onClick={() => setFilterStatus(f)} style={{
+              <button key={f} data-testid={`filter-${f}`} onClick={() => setFilterStatus(f)} style={{
                 padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700,
                 cursor: "pointer", fontFamily: "inherit", minHeight: 30,
                 background: filterStatus === f ? (f === "all" ? C.accent : STATUS[f]?.bg || C.accent) : "transparent",
@@ -322,7 +323,7 @@ export default function FixturesTab({ job, onRefresh }) {
               { id: "vendor", label: "By Vendor", icon: "🏭" },
               { id: "section", label: "By Section", icon: "📂" }
             ].map(g => (
-              <button key={g.id} onClick={() => setGroupBy(g.id)} style={{
+              <button key={g.id} data-testid={`group-${g.id}`} onClick={() => setGroupBy(g.id)} style={{
                 padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
                 cursor: "pointer", fontFamily: "inherit", minHeight: 30,
                 background: groupBy === g.id ? (g.id === "section" ? C.tealDim : C.accentDim) : "transparent",
@@ -335,11 +336,11 @@ export default function FixturesTab({ job, onRefresh }) {
           </div>
 
           <div style={{ height: 20, width: 1, background: C.border, flexShrink: 0 }} />
-          <Toggle checked={showQtyCol} onChange={setShowQtyCol} label="Ord. Qty" />
-          <Toggle checked={bulkMode} onChange={v => { setBulkMode(v); setSelectedIds(new Set()); }} label="Bulk" />
-          <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import">Import</Btn>
-          <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} data-tutorial="report">Report</Btn>
-          <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})}>Add Item</Btn>
+          <Toggle checked={showQtyCol} onChange={setShowQtyCol} label="Ord. Qty" data-testid="qty-toggle" />
+          <Toggle checked={bulkMode} onChange={v => { setBulkMode(v); setSelectedIds(new Set()); }} label="Bulk" data-testid="bulk-toggle" />
+          <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" data-testid="import-btn">Import</Btn>
+          <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} data-tutorial="report" data-testid="report-btn">Report</Btn>
+          <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})} data-testid="add-item-btn">Add Item</Btn>
         </div>
       )}
 
@@ -500,8 +501,8 @@ export default function FixturesTab({ job, onRefresh }) {
       )}
 
       {/* Rows */}
-      <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
-        {Object.entries(grouped).length === 0 ? (
+      {Object.entries(grouped).length === 0 ? (
+        <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ padding: 56, textAlign: "center", color: C.muted }}>
             <div style={{ fontSize: 34, marginBottom: 11 }}>📋</div>
             <div style={{ fontSize: 14, color: C.text, marginBottom: 5 }}>
@@ -513,8 +514,72 @@ export default function FixturesTab({ job, onRefresh }) {
                 : "Add items or import from Assembly Detail."}
             </div>
           </div>
-        ) : (
-          Object.entries(grouped).map(([grp, gitems]) => (
+        </div>
+      ) : filteredItems.length > 50 ? (
+        /* ── Virtual Scrolling for large lists ── */
+        <VirtualList
+          items={(() => {
+            // Flatten grouped items into a single array with group headers as entries
+            const flat = [];
+            for (const [grp, gitems] of Object.entries(grouped)) {
+              flat.push({ _type: 'header', _group: grp, _count: gitems.length });
+              for (let idx = 0; idx < gitems.length; idx++) {
+                flat.push({ _type: 'item', _itemIdx: idx, ...gitems[idx] });
+              }
+            }
+            return flat;
+          })()}
+          itemHeight={isMobile ? 100 : 44}
+          overscan={10}
+          containerStyle={{ flex: 1 }}
+          renderItem={(entry, i) => {
+            if (entry._type === 'header') {
+              return (
+                <div key={`hdr-${entry._group}`} style={{
+                  padding: "5px 14px",
+                  background: groupBy === "section" ? C.tealDim : C.accentDim,
+                  borderBottom: `1px solid ${groupBy === "section" ? C.tealBorder : C.accentBorder}`,
+                  borderTop: `1px solid ${groupBy === "section" ? C.tealBorder : C.accentBorder}`,
+                  fontSize: 9, fontWeight: 700,
+                  color: groupBy === "section" ? C.teal : C.accent,
+                  textTransform: "uppercase", letterSpacing: "0.07em",
+                  display: "flex", gap: 8, alignItems: "center",
+                  height: isMobile ? 100 : 44, boxSizing: "border-box"
+                }}>
+                  {groupBy === "section" ? "📂" : "🏭"} {entry._group}
+                  <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                    ({entry._count})
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <div key={entry.id} data-tutorial={entry._itemIdx === 0 ? "item-row" : undefined}>
+                <ItemRow
+                  item={entry}
+                  onEdit={handleItemClick}
+                  onQuickReceive={() => setQuickReceiveId(quickReceiveId === entry.id ? null : entry.id)}
+                  showQtyCol={showQtyCol}
+                  groupBy={groupBy}
+                  bulkMode={bulkMode}
+                  isSelected={selectedIds.has(entry.id)}
+                  onToggleSelect={toggleSelect}
+                />
+                {quickReceiveId === entry.id && !bulkMode && (
+                  <QuickReceive
+                    item={entry}
+                    onSave={(data) => handleQuickReceive(entry.id, data)}
+                    onCancel={() => setQuickReceiveId(null)}
+                  />
+                )}
+              </div>
+            );
+          }}
+        />
+      ) : (
+        /* ── Standard rendering for small lists ── */
+        <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
+          {Object.entries(grouped).map(([grp, gitems]) => (
             <div key={grp}>
               <div style={{
                 padding: "5px 14px",
@@ -555,9 +620,9 @@ export default function FixturesTab({ job, onRefresh }) {
                 </React.Fragment>
               ))}
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Modals */}
       {editItem !== null && (

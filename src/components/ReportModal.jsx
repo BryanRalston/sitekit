@@ -3,6 +3,149 @@ import { C, TF, MF, STATUS, getItemStatus } from '../tokens';
 import { Modal, Btn, Inp, Badge } from './ui';
 import { api } from '../api';
 
+// ─── CSV Export ────────────────────────────────────────────────────────────────
+function exportCSV(job, items, groupBy) {
+  const headers = ['Item #', 'Class', 'Fixture Book', 'Description', 'Vendor', 'Section', 'Qty Ordered', 'Qty Received', 'Del. Date', 'Status', 'Missing Parts', 'Additional Orders', 'Damaged', 'Damage Notes', 'Notes'];
+  const rows = items.map(item => [
+    item.itemNumber, item.materialClass, item.fixtureBook, item.description,
+    item.vendor, item.section, item.qtyOrdered, item.qtyReceived,
+    item.delDate, getItemStatus(item),
+    item.missingParts, item.additionalOrders, item.damaged ? 'Yes' : 'No',
+    item.damageNotes, item.notes
+  ].map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(','));
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${job.name || 'report'}-fixtures-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── PDF Export ────────────────────────────────────────────────────────────────
+async function exportPDF(job, items, groupBy) {
+  // Dynamically load jsPDF + autoTable from CDN
+  if (!window.jspdf) {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+    document.head.appendChild(script);
+    await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; });
+
+    const script2 = document.createElement('script');
+    script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js';
+    document.head.appendChild(script2);
+    await new Promise((resolve, reject) => { script2.onload = resolve; script2.onerror = reject; });
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('landscape', 'mm', 'letter');
+
+  // Header
+  doc.setFillColor(13, 17, 23);
+  doc.rect(0, 0, doc.internal.pageSize.width, 30, 'F');
+  doc.setTextColor(249, 115, 22);
+  doc.setFontSize(20);
+  doc.text('SITEKIT', 14, 15);
+  doc.setTextColor(230, 237, 243);
+  doc.setFontSize(12);
+  doc.text('Fixture & Equipment Receiving Report', 50, 12);
+  doc.setFontSize(10);
+  doc.text(`${job.name} | Store #${job.storeNumber || ''} | ${job.location || ''} | ${new Date().toLocaleDateString()}`, 50, 20);
+
+  // Summary stats
+  const received = items.filter(i => getItemStatus(i) === 'received').length;
+  const issueCount = items.filter(i => getItemStatus(i) === 'issue').length;
+  const pending = items.filter(i => ['pending', 'overdue'].includes(getItemStatus(i))).length;
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(11);
+  doc.text(`Total: ${items.length}  |  Received: ${received}  |  Pending: ${pending}  |  Issues: ${issueCount}`, 14, 40);
+
+  // Items table grouped
+  const grouped = {};
+  for (const item of items) {
+    const key = groupBy === 'section' ? (item.section || 'Ungrouped') : (item.vendor || 'Unknown');
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item);
+  }
+
+  let startY = 48;
+  for (const [group, gitems] of Object.entries(grouped)) {
+    doc.setFontSize(10);
+    doc.setTextColor(249, 115, 22);
+    doc.text(`${groupBy === 'section' ? '' : ''} ${group} (${gitems.length})`, 14, startY);
+    startY += 4;
+
+    doc.autoTable({
+      startY,
+      head: [['Item #', 'Class', 'Book', 'Description', 'Ord', 'Rec', 'Del. Date', 'Status']],
+      body: gitems.map(item => [
+        item.itemNumber || '', item.materialClass || '', item.fixtureBook || '',
+        (item.description || '').slice(0, 50), item.qtyOrdered || '', item.qtyReceived || '',
+        item.delDate || '', getItemStatus(item)
+      ]),
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [28, 35, 51], textColor: [230, 237, 243], fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 18 }, 1: { cellWidth: 16 }, 2: { cellWidth: 14 },
+        3: { cellWidth: 'auto' }, 4: { cellWidth: 12 }, 5: { cellWidth: 12 },
+        6: { cellWidth: 22 }, 7: { cellWidth: 18 },
+      },
+      margin: { left: 14, right: 14 },
+    });
+
+    startY = doc.lastAutoTable.finalY + 8;
+
+    if (startY > doc.internal.pageSize.height - 30) {
+      doc.addPage();
+      startY = 20;
+    }
+  }
+
+  // Issues section
+  const issueItems = items.filter(i => i.damaged || i.missingParts || i.additionalOrders);
+  if (issueItems.length > 0) {
+    if (startY > doc.internal.pageSize.height - 60) {
+      doc.addPage();
+      startY = 20;
+    }
+    doc.setFontSize(12);
+    doc.setTextColor(248, 81, 73);
+    doc.text(`Issues (${issueItems.length})`, 14, startY);
+    startY += 6;
+
+    doc.autoTable({
+      startY,
+      head: [['Item #', 'Description', 'Issue Type', 'Details']],
+      body: issueItems.map(item => [
+        item.itemNumber || '',
+        (item.description || '').slice(0, 40),
+        [item.damaged ? 'Damaged' : '', item.missingParts ? 'Missing' : '', item.additionalOrders ? 'Add. Orders' : ''].filter(Boolean).join(', '),
+        [item.damageNotes, item.missingParts, item.additionalOrders].filter(Boolean).join('; ').slice(0, 60),
+      ]),
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [248, 81, 73], textColor: 255 },
+      margin: { left: 14, right: 14 },
+    });
+  }
+
+  // Footer on all pages
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Generated by SiteKit — ${new Date().toLocaleString()} — Page ${i} of ${pageCount}`,
+      doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 8, { align: 'center' });
+  }
+
+  doc.save(`${job.name || 'report'}-fixtures-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
 const CONTRACTOR_KEY = 'sitekit_contractor';
 
 function getContractorInfo() {
@@ -33,6 +176,22 @@ export default function ReportModal({ job, groupBy, onClose }) {
 
   const [contractor, setContractor] = useState(getContractorInfo);
   const [editContractor, setEditContractor] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handleExportCSV = () => {
+    exportCSV(job, items, groupBy);
+  };
+
+  const handleExportPDF = async () => {
+    setPdfLoading(true);
+    try {
+      await exportPDF(job, items, groupBy);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   const updateContractor = (key, val) => {
     const updated = { ...contractor, [key]: val };
@@ -255,8 +414,12 @@ export default function ReportModal({ job, groupBy, onClose }) {
         )}
 
         {/* Actions */}
-        <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <div className="no-print" style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
           <Btn variant="ghost" onClick={onClose}>Close</Btn>
+          <Btn variant="ghost" icon="📄" onClick={handleExportCSV}>CSV</Btn>
+          <Btn variant="blue" icon="📑" onClick={handleExportPDF} disabled={pdfLoading}>
+            {pdfLoading ? "Generating..." : "PDF"}
+          </Btn>
           <Btn variant="orange" icon="🖨" onClick={() => window.print()}>Print</Btn>
         </div>
       </div>

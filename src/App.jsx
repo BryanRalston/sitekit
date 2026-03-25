@@ -7,6 +7,7 @@ import VisualRefTab from './components/VisualRefTab';
 import ReceiptsTab from './components/ReceiptsTab';
 import PinGate from './components/PinGate';
 import Tutorial, { TutorialPrompt } from './components/Tutorial';
+import GlobalSearch from './components/GlobalSearch';
 import { ToastProvider, useToast } from './components/Toast';
 import { SkeletonList } from './components/Skeleton';
 import { api } from './api';
@@ -33,6 +34,7 @@ function AppInner() {
   const [showWelcomeNewJob, setShowWelcomeNewJob] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const isMobile = useMobile();
 
   // Full job data (with items + departments) for the active job
@@ -83,6 +85,39 @@ function AppInner() {
     }).catch(() => {});
   }, [unlocked, loading]);
 
+  // Auto-backup reminder (after unlock)
+  useEffect(() => {
+    if (!unlocked || loading) return;
+    (async () => {
+      try {
+        const config = await getOne('config', 'last_backup_date');
+        if (!config) {
+          // Never backed up — prompt after first job is created
+          if (jobs.length > 0) {
+            toast.info("Back up your data regularly. Tap the Backup button in the sidebar.", { duration: 8000 });
+          }
+        } else {
+          const daysSince = (Date.now() - new Date(config.value).getTime()) / (1000 * 60 * 60 * 24);
+          if (daysSince > 7) {
+            toast.warning("It's been " + Math.floor(daysSince) + " days since your last backup.", { duration: 8000 });
+          }
+        }
+      } catch (_) {}
+    })();
+  }, [unlocked, loading, jobs.length]);
+
+  // Ctrl+K / Cmd+K keyboard shortcut for global search
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowGlobalSearch(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   // Reload full job when active job changes
   useEffect(() => {
     if (activeJobId) loadFullJob(activeJobId);
@@ -100,6 +135,23 @@ function AppInner() {
   const handleSelectJob = (jobId) => {
     setActiveJobId(jobId);
     setActiveTab("fixtures");
+  };
+
+  const handleSearchNavigate = (tab, itemId) => {
+    setActiveTab(tab);
+    setShowGlobalSearch(false);
+    // Scroll to item after tab switch settles
+    if (itemId) {
+      setTimeout(() => {
+        const el = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.style.outline = `2px solid ${C.accent}`;
+          el.style.outlineOffset = '2px';
+          setTimeout(() => { el.style.outline = 'none'; }, 2000);
+        }
+      }, 150);
+    }
   };
 
   const handleNewJob = async (jobData) => {
@@ -181,7 +233,13 @@ function AppInner() {
           <div style={{ ...TF, fontSize: 18, fontWeight: 700, color: C.accent, flex: 1 }}>
             SITE<span style={{ color: C.text }}>KIT</span>
           </div>
-          <button onClick={() => setShowTutorial(true)} style={{
+          <button onClick={() => setShowGlobalSearch(true)} style={{
+            background: 'none', border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.muted, cursor: 'pointer', fontSize: 15,
+            minWidth: 36, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'inherit',
+          }}>&#x1F50D;</button>
+          <button data-testid="help-btn" onClick={() => setShowTutorial(true)} style={{
             background: 'none', border: `1px solid ${C.border}`, borderRadius: 6,
             color: C.muted, cursor: 'pointer', fontSize: 15, fontWeight: 700,
             minWidth: 36, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -257,6 +315,7 @@ function AppInner() {
             </div>
 
             <Btn variant="primary" size="lg" icon="＋" onClick={() => setShowWelcomeNewJob(true)}
+              data-testid="get-started-btn"
               style={{ marginTop: 8, minHeight: 50, fontSize: 16, padding: "12px 28px" }}>
               Get Started
             </Btn>
@@ -286,7 +345,7 @@ function AppInner() {
                   {activeJobFull.date && <span>{activeJobFull.date}</span>}
                 </div>
               </div>
-              <div style={{ display: "flex", padding: "10px 22px 0", gap: 3, overflowX: "auto" }}>
+              <div style={{ display: "flex", padding: "10px 22px 0", gap: 3, overflowX: "auto", alignItems: "center" }}>
                 {[
                   {
                     id: "fixtures", icon: "📋", label: "Fixtures",
@@ -306,7 +365,7 @@ function AppInner() {
                 ].map(tab => {
                   const isA = activeTab === tab.id;
                   return (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} data-tutorial={tab.tutorial || undefined} style={{
+                    <button key={tab.id} data-testid={`tab-${tab.id}`} onClick={() => setActiveTab(tab.id)} data-tutorial={tab.tutorial || undefined} style={{
                       padding: "8px 17px", borderRadius: "8px 8px 0 0", cursor: "pointer",
                       background: isA ? C.bg : "transparent",
                       border: `1px solid ${isA ? C.border : "transparent"}`,
@@ -326,6 +385,19 @@ function AppInner() {
                     </button>
                   );
                 })}
+                <button onClick={() => setShowGlobalSearch(true)} style={{
+                  padding: "8px 12px", borderRadius: "8px 8px 0 0", cursor: "pointer",
+                  background: "transparent", border: "1px solid transparent",
+                  color: C.muted, fontSize: 14, fontFamily: "inherit",
+                  display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                  minHeight: 44, marginLeft: "auto",
+                }}
+                  onMouseEnter={e => e.currentTarget.style.color = C.text}
+                  onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                  title="Search (Ctrl+K)"
+                >
+                  &#x1F50D; <span style={{ fontSize: 11 }}>Search</span>
+                </button>
               </div>
             </div>
 
@@ -352,6 +424,15 @@ function AppInner() {
           </>
         )}
       </main>
+
+      {/* Global Search */}
+      {showGlobalSearch && (
+        <GlobalSearch
+          job={activeJobFull}
+          onClose={() => setShowGlobalSearch(false)}
+          onNavigate={handleSearchNavigate}
+        />
+      )}
 
       {/* Tutorial */}
       {showTutorial && (

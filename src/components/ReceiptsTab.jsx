@@ -273,7 +273,7 @@ export default function ReceiptsTab({ job, onRefresh }) {
 
           {/* Row 2: Add Receipt */}
           <div style={{ padding: '4px 14px 10px', display: 'flex', gap: 8 }}>
-            <Btn variant="primary" size="sm" icon="+" onClick={() => setEditReceipt({})} style={{ flex: 1, justifyContent: 'center', minHeight: 44 }}>
+            <Btn variant="primary" size="sm" icon="+" onClick={() => setEditReceipt({})} data-testid="add-receipt-btn" style={{ flex: 1, justifyContent: 'center', minHeight: 44 }}>
               Add Receipt
             </Btn>
           </div>
@@ -345,7 +345,7 @@ export default function ReceiptsTab({ job, onRefresh }) {
 
           <div style={{ height: 20, width: 1, background: C.border, flexShrink: 0 }} />
 
-          <Btn variant="primary" size="sm" icon="+" onClick={() => setEditReceipt({})}>Add Receipt</Btn>
+          <Btn variant="primary" size="sm" icon="+" onClick={() => setEditReceipt({})} data-testid="add-receipt-btn">Add Receipt</Btn>
         </div>
       )}
 

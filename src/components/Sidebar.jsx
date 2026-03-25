@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { C, TF, MF, getItemStatus } from '../tokens';
 import { Btn, Inp, Modal } from './ui';
 import { api } from '../api';
+import { put } from '../db';
 import ReceiptLogImport from './ReceiptLogImport';
 import { useToast } from './Toast';
 
@@ -167,6 +168,8 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       a.click();
       URL.revokeObjectURL(url);
       toast.success("Backup downloaded");
+      // Track backup date for reminder system
+      try { await put('config', { key: 'last_backup_date', value: new Date().toISOString() }); } catch (_) {}
     } catch (err) {
       toast.error('Export failed: ' + err.message);
     }
@@ -216,7 +219,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
           const donePhotos = job.done_photo_count ?? (job.departments || []).reduce((a, d) => a + (d.photos || []).filter(p => p.completed).length, 0);
 
           return (
-            <div key={job.id} onClick={() => { onSelectJob(job.id); if (onCloseMobile) onCloseMobile(); }}
+            <div key={job.id} data-testid={`job-item-${job.id}`} onClick={() => { onSelectJob(job.id); if (onCloseMobile) onCloseMobile(); }}
               style={{
                 padding: "9px 15px", cursor: "pointer",
                 background: isActive ? C.accentDim : "transparent",
@@ -247,7 +250,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
                     {photoCount > 0 && <span style={{ fontSize: 10, color: C.muted }}>📷 {donePhotos}/{photoCount}</span>}
                   </div>
                 </div>
-                <button onClick={e => handleDelete(e, job.id)}
+                <button data-testid={`delete-job-${job.id}`} onClick={e => handleDelete(e, job.id)}
                   style={{
                     background: "none", border: "none", color: C.muted,
                     cursor: "pointer", fontSize: 13, opacity: 0.35,
@@ -267,12 +270,12 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
           {[
-            { icon: "🔒", label: "Lock", tutorial: "lock", onClick: () => { sessionStorage.removeItem('sitekit_unlocked'); window.location.reload(); } },
-            { icon: "🔑", label: "PIN", onClick: () => setShowChangePin(true) },
-            { icon: "📥", label: "ReceiptLog", onClick: () => setShowReceiptImport(true) },
-            { icon: "💾", label: "Backup", tutorial: "backup", onClick: handleExport },
+            { icon: "🔒", label: "Lock", tutorial: "lock", testId: "lock-btn", onClick: () => { sessionStorage.removeItem('sitekit_unlocked'); window.location.reload(); } },
+            { icon: "🔑", label: "PIN", testId: "change-pin-btn", onClick: () => setShowChangePin(true) },
+            { icon: "📥", label: "ReceiptLog", testId: "receiptlog-import-btn", onClick: () => setShowReceiptImport(true) },
+            { icon: "💾", label: "Backup", tutorial: "backup", testId: "backup-btn", onClick: handleExport },
           ].map(btn => (
-            <button key={btn.label} onClick={btn.onClick} data-tutorial={btn.tutorial || undefined} style={{
+            <button key={btn.label} onClick={btn.onClick} data-tutorial={btn.tutorial || undefined} data-testid={btn.testId} style={{
               background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
               color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 8px",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 4, minHeight: 32,
@@ -285,7 +288,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
             </button>
           ))}
         </div>
-        <Btn variant="primary" full icon="+" onClick={() => setShowNewJob(true)} data-tutorial="new-job">New Job</Btn>
+        <Btn variant="primary" full icon="+" onClick={() => setShowNewJob(true)} data-tutorial="new-job" data-testid="new-job-btn">New Job</Btn>
       </div>
 
       {showNewJob && <NewJobModal onSave={handleNewJob} onClose={() => setShowNewJob(false)} />}

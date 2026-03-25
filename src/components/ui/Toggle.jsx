@@ -1,9 +1,9 @@
 import React from 'react';
 import { C } from '../../tokens';
 
-export default function Toggle({ checked, onChange, label, right }) {
+export default function Toggle({ checked, onChange, label, right, ...rest }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", minHeight: 44 }}>
+    <label {...rest} style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", minHeight: 44 }}>
       {!right && label && <span style={{ fontSize: 12, color: C.muted }}>{label}</span>}
       <div onClick={() => onChange(!checked)} style={{
         width: 32, height: 17, borderRadius: 9, position: "relative",

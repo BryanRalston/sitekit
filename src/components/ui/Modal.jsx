@@ -20,7 +20,7 @@ export default function Modal({ title, onClose, children, width = 600, noPad }) 
           padding: "15px 22px", borderBottom: `1px solid ${C.border}`, flexShrink: 0
         }}>
           <h2 style={{ ...TF, fontSize: 20, fontWeight: 700, color: C.text }}>{title}</h2>
-          <button onClick={onClose} style={{
+          <button data-testid="modal-close" onClick={onClose} style={{
             background: "none", border: "none", color: C.muted,
             cursor: "pointer", fontSize: 20, minWidth: 44, minHeight: 44,
             display: "flex", alignItems: "center", justifyContent: "center",

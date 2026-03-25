@@ -1,13 +1,9 @@
 import { generateId, getAll, getAllByIndex, getOne, put, del, transaction, openDB } from './db.js';
 import { DEPT_COLORS } from './tokens.js';
 import { compressImage, compressReceiptImage } from './lib/image-utils.js';
+import { sanitize } from './lib/sanitize.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function sanitize(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/[<>"'&]/g, '').trim();
-}
 
 // PBKDF2 with salt — stronger than plain SHA-256 for short PINs
 const PIN_SALT = 'sitekit-pin-v1'; // Fixed salt (acceptable for local-only app)
