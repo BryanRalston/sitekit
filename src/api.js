@@ -1,4 +1,4 @@
-import { generateId, getAll, getAllByIndex, getOne, put, del } from './db.js';
+import { generateId, getAll, getAllByIndex, getOne, put, del, transaction, openDB } from './db.js';
 import { DEPT_COLORS } from './tokens.js';
 import { compressImage, compressReceiptImage } from './lib/image-utils.js';
 
@@ -6,13 +6,23 @@ import { compressImage, compressReceiptImage } from './lib/image-utils.js';
 
 function sanitize(str) {
   if (typeof str !== 'string') return str;
-  return str.replace(/[<>]/g, '').trim();
+  return str.replace(/[<>"'&]/g, '').trim();
 }
 
+// PBKDF2 with salt — stronger than plain SHA-256 for short PINs
+const PIN_SALT = 'sitekit-pin-v1'; // Fixed salt (acceptable for local-only app)
+const PBKDF2_ITERATIONS = 100000;
+
 async function hashPin(pin) {
-  const data = new TextEncoder().encode(pin);
-  const buf = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', encoder.encode(pin), 'PBKDF2', false, ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: encoder.encode(PIN_SALT), iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    keyMaterial, 256
+  );
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
@@ -87,17 +97,23 @@ export const api = {
   },
 
   async deleteJob(id) {
+    // Gather all IDs to delete
     const items = await getAllByIndex('items', 'jobId', id);
     const depts = await getAllByIndex('departments', 'jobId', id);
     const receipts = await getAllByIndex('receipts', 'jobId', id);
     const allPhotos = await getAll('photos');
     const deptIds = depts.map(d => d.id);
     const photos = allPhotos.filter(p => deptIds.includes(p.departmentId));
-    for (const i of items) await del('items', i.id);
-    for (const p of photos) { await del('photos', p.id); await del('blobs', p.id).catch(() => {}); }
-    for (const d of depts) await del('departments', d.id);
-    for (const r of receipts) { await del('receipts', r.id); await del('receipt_blobs', r.id).catch(() => {}); }
-    await del('jobs', id);
+
+    // Atomic delete across all stores in one transaction
+    const stores = ['jobs', 'items', 'departments', 'photos', 'blobs', 'receipts', 'receipt_blobs'];
+    await transaction(stores, 'readwrite', (s) => {
+      s.jobs.delete(id);
+      for (const i of items) s.items.delete(i.id);
+      for (const d of depts) s.departments.delete(d.id);
+      for (const p of photos) { s.photos.delete(p.id); s.blobs.delete(p.id); }
+      for (const r of receipts) { s.receipts.delete(r.id); s.receipt_blobs.delete(r.id); }
+    });
     return { success: true };
   },
 
@@ -150,17 +166,20 @@ export const api = {
 
   async bulkReceive(jobId, data) {
     const { itemIds, qtyReceived, dateReceived } = data;
-    let count = 0;
+    // Fetch all items first, then batch update in one transaction
+    const itemsToUpdate = [];
     for (const itemId of itemIds) {
       const item = await getOne('items', itemId);
       if (item) {
         item.qtyReceived = qtyReceived || item.qtyOrdered || '0';
         item.dateReceived = dateReceived || today();
-        await put('items', item);
-        count++;
+        itemsToUpdate.push(item);
       }
     }
-    return { count };
+    await transaction(['items'], 'readwrite', (s) => {
+      for (const item of itemsToUpdate) s.items.put(item);
+    });
+    return { count: itemsToUpdate.length };
   },
 
   // ── Import ────────────────────────────────────────────────────────────────

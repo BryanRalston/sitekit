@@ -6,7 +6,7 @@ const NUM_DIGITS = 4;
 
 function PinDots({ digits, error }) {
   return (
-    <div style={{
+    <div role="group" aria-label={`PIN entry: ${digits.filter(d => d != null).length} of ${NUM_DIGITS} digits entered`} style={{
       display: 'flex', gap: 16, justifyContent: 'center',
       animation: error ? 'shake 0.4s ease' : 'none',
     }}>
@@ -68,7 +68,7 @@ function NumberPad({ onDigit, onBackspace, onSubmit, disabled }) {
       {keys.map((key) => {
         if (key === 'back') {
           return (
-            <button key="back" onClick={onBackspace} disabled={disabled} style={{
+            <button key="back" onClick={onBackspace} disabled={disabled} aria-label="Backspace" style={{
               ...btnBase,
               fontSize: 20,
               opacity: disabled ? 0.4 : 1,
@@ -82,7 +82,7 @@ function NumberPad({ onDigit, onBackspace, onSubmit, disabled }) {
         }
         if (key === 'enter') {
           return (
-            <button key="enter" onClick={onSubmit} disabled={disabled} style={{
+            <button key="enter" onClick={onSubmit} disabled={disabled} aria-label="Submit PIN" style={{
               ...btnBase,
               fontSize: 18,
               background: C.accentDim,

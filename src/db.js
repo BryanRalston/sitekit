@@ -114,6 +114,9 @@ export function openDB() {
  * Generate a unique ID: timestamp base-36 + random chars.
  */
 export function generateId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
