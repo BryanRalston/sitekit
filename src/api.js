@@ -1,4 +1,5 @@
 import { generateId, getAll, getAllByIndex, getOne, put, del } from './db.js';
+import { DEPT_COLORS } from './tokens.js';
 import { compressImage, compressReceiptImage } from './lib/image-utils.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -151,6 +152,26 @@ export const api = {
   },
 
   async importConfirm(jobId, items) {
+    // Auto-create departments from unique sections
+    const sections = [...new Set(items.map(i => i.section).filter(Boolean))];
+    const existingDepts = await getAllByIndex('departments', 'jobId', jobId);
+    const existingNames = new Set(existingDepts.map(d => d.name.toLowerCase()));
+    let deptIndex = existingDepts.length;
+
+    for (const section of sections) {
+      if (!existingNames.has(section.toLowerCase())) {
+        await put('departments', {
+          id: generateId(),
+          jobId,
+          name: section,
+          color: DEPT_COLORS[deptIndex % DEPT_COLORS.length],
+          sortOrder: deptIndex,
+        });
+        deptIndex++;
+      }
+    }
+
+    // Import items
     let count = 0;
     for (const item of items) {
       await put('items', {
@@ -170,7 +191,7 @@ export const api = {
       });
       count++;
     }
-    return { count };
+    return { count, departmentsCreated: sections.length - existingNames.size };
   },
 
   // ── Departments ───────────────────────────────────────────────────────────

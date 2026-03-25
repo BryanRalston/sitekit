@@ -93,17 +93,69 @@ function matchVendorExact(line) {
 }
 
 /**
- * Check if a line is a vendor+class combo like "AGILITY RETAIL DGS" or "AGILITY RETAIL"
- * Returns { vendor, materialClass } or null
+ * Check if a line starts with a vendor, and extract any inline data after the vendor name.
+ * Returns { vendor, materialClass, rest } or null.
+ * `rest` is everything on the line after vendor+class — may contain item# + description + qty.
  */
 function parseVendorLine(line) {
   const vendor = matchVendorExact(line);
   if (!vendor) return null;
-  const rest = line.slice(vendor.length).trim().toUpperCase();
-  if (rest && KNOWN_CLASSES.has(rest)) {
-    return { vendor, materialClass: rest };
+  let rest = line.slice(vendor.length).trim();
+  let materialClass = '';
+  // Check if rest starts with a known class
+  const restUpper = rest.toUpperCase();
+  for (const cls of KNOWN_CLASSES) {
+    if (restUpper === cls || restUpper.startsWith(cls + ' ')) {
+      materialClass = cls;
+      rest = rest.slice(cls.length).trim();
+      break;
+    }
   }
-  return { vendor, materialClass: '' };
+  return { vendor, materialClass, rest };
+}
+
+/**
+ * Try to parse inline item data from text that follows vendor+class on the same line.
+ * e.g., "WEBM MMX A LED 2X4 RECESSED" or "CONR 96\"LWR RETAINER MILL 34.00 E"
+ * Returns { materialClass?, itemNumber, description, qtyOrdered? } or null.
+ */
+function parseInlineItemData(text, existingClass) {
+  if (!text || text.trim().length < 2) return null;
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+
+  let materialClass = existingClass || '';
+  let startIdx = 0;
+
+  // If no class yet, check if first token looks like a class (short all-caps, not an item code pattern
+  // that has description after it)
+  if (!materialClass && tokens.length >= 2 && /^[A-Z]{2,6}$/.test(tokens[0]) && ITEM_CODE_RE.test(tokens[0])) {
+    // First token could be material class OR item number
+    // Check if second token is also an item code — if so, first is class, second is item
+    if (tokens.length >= 3 && ITEM_CODE_RE.test(tokens[1])) {
+      // Two consecutive item-code-like tokens: first is likely class, second is item#
+      materialClass = tokens[0];
+      startIdx = 1;
+    }
+  }
+
+  // Now tokens[startIdx] should be the item number
+  if (startIdx >= tokens.length) return null;
+  if (!ITEM_CODE_RE.test(tokens[startIdx])) return null;
+
+  const itemNumber = tokens[startIdx];
+  const remaining = tokens.slice(startIdx + 1).join(' ');
+
+  // Check if remaining has a qty at the end
+  const qtyMatch = remaining.match(QTY_AT_END_RE);
+  let description = remaining;
+  let qtyOrdered = '';
+  if (qtyMatch) {
+    description = remaining.slice(0, remaining.lastIndexOf(qtyMatch[1])).trim();
+    qtyOrdered = qtyMatch[1];
+  }
+
+  return { materialClass, itemNumber, description, qtyOrdered };
 }
 
 /**
@@ -261,10 +313,29 @@ export function parsePdfText(text) {
     if (state === 'IDLE') {
       if (vendorInfo) {
         // Start a new item
-        if (cur.itemNumber) finalizeItem(); // shouldn't happen, but safety
+        if (cur.itemNumber) finalizeItem();
         resetCur();
         cur.vendor = vendorInfo.vendor;
         cur.materialClass = vendorInfo.materialClass;
+
+        // Check if rest of line contains inline item data (pdfjs-dist format)
+        // e.g., "WESCO WEBM MMX A LED 2X4 RECESSED" or "AGILITY RETAIL DGS DFAI 8' IMPLIED VALANCE6.00E"
+        if (vendorInfo.rest) {
+          const inline = parseInlineItemData(vendorInfo.rest, vendorInfo.materialClass);
+          if (inline && inline.itemNumber) {
+            cur.materialClass = inline.materialClass || cur.materialClass;
+            cur.itemNumber = inline.itemNumber;
+            if (inline.description) cur.descParts.push(inline.description);
+            if (inline.qtyOrdered) {
+              cur.qtyOrdered = inline.qtyOrdered;
+              state = 'COLLECTING_DESC';
+            } else {
+              state = 'HAVE_ITEM';
+            }
+            continue;
+          }
+        }
+
         state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
         continue;
       }
@@ -341,9 +412,25 @@ export function parsePdfText(text) {
       }
 
       // Otherwise, treat as item code (no material class for this vendor)
-      if (ITEM_CODE_RE.test(line)) {
+      if (ITEM_CODE_RE.test(line) && line.trim().split(/\s+/).length === 1) {
+        // Single item code on its own line
         cur.itemNumber = line;
         state = 'HAVE_ITEM';
+        continue;
+      }
+
+      // Try inline parsing: line might have item# + desc + qty (pdfjs format)
+      const inlineFromVendor = parseInlineItemData(line, cur.materialClass);
+      if (inlineFromVendor && inlineFromVendor.itemNumber) {
+        cur.materialClass = inlineFromVendor.materialClass || cur.materialClass;
+        cur.itemNumber = inlineFromVendor.itemNumber;
+        if (inlineFromVendor.description) cur.descParts.push(inlineFromVendor.description);
+        if (inlineFromVendor.qtyOrdered) {
+          cur.qtyOrdered = inlineFromVendor.qtyOrdered;
+          state = 'COLLECTING_DESC';
+        } else {
+          state = 'HAVE_ITEM';
+        }
         continue;
       }
 
@@ -367,10 +454,23 @@ export function parsePdfText(text) {
     }
 
     if (state === 'HAVE_CLASS') {
-      // Expecting: item code
+      // Expecting: item code (alone on line) OR item# + description + qty (inline, pdfjs format)
       if (ITEM_CODE_RE.test(line)) {
         cur.itemNumber = line;
         state = 'HAVE_ITEM';
+        continue;
+      }
+      // Try inline parsing: "CONR 96"LWR RETAINER MILL 34.00 E"
+      const inlineFromClass = parseInlineItemData(line, cur.materialClass);
+      if (inlineFromClass && inlineFromClass.itemNumber) {
+        cur.itemNumber = inlineFromClass.itemNumber;
+        if (inlineFromClass.description) cur.descParts.push(inlineFromClass.description);
+        if (inlineFromClass.qtyOrdered) {
+          cur.qtyOrdered = inlineFromClass.qtyOrdered;
+          state = 'COLLECTING_DESC';
+        } else {
+          state = 'HAVE_ITEM';
+        }
         continue;
       }
       // Not an item code — maybe we misidentified the class

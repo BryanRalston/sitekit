@@ -129,7 +129,7 @@ export default function ImportModal({ jobId, onImport, onClose }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.csv,.xls,.xlsx,.txt"
+              accept="*/*"
               style={{ display: "none" }}
               onChange={e => { if (e.target.files[0]) handleFileUpload(e.target.files[0]); }}
             />

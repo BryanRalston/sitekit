@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Set the worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
 
 /**
  * Extract text from a PDF file, reconstructing line structure from text spans.
@@ -18,12 +18,13 @@ export async function extractTextFromPdf(file) {
     const textContent = await page.getTextContent();
 
     // Group items by Y position to reconstruct lines
+    // Use tight threshold (1px) to preserve line structure matching pdf-parse format
     let lastY = null;
     let lineText = '';
 
     for (const item of textContent.items) {
       const y = Math.round(item.transform[5]); // Y position
-      if (lastY !== null && Math.abs(y - lastY) > 3) {
+      if (lastY !== null && Math.abs(y - lastY) > 1) {
         // New line
         fullText += lineText.trim() + '\n';
         lineText = '';
