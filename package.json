@@ -1,0 +1,30 @@
+{
+  "name": "sitekit",
+  "version": "1.0.0",
+  "description": "Jobsite command center for retail store remodels",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "preview": "vite build && node server/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "pdf-parse": "^1.1.0",
+    "sharp": "^0.33.0",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^9.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "vite": "^5.4.0"
+  }
+}

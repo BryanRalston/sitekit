@@ -1,0 +1,153 @@
+import React, { useState } from 'react';
+import { C, TF } from '../tokens';
+import { Btn } from './ui';
+import PhotoCard from './PhotoCard';
+import { api } from '../api';
+
+export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDelete, onRefresh }) {
+  const [open, setOpen] = useState(true);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(dept.name);
+
+  const photos = dept.photos || [];
+  const done = photos.filter(p => p.completed).length;
+
+  const handleRename = async () => {
+    if (draftName.trim() && draftName !== dept.name) {
+      try {
+        await api.updateDepartment(dept.id, { name: draftName.trim() });
+        onRefresh();
+      } catch (err) {
+        alert("Rename failed: " + err.message);
+      }
+    }
+    setRenaming(false);
+  };
+
+  const handleDeleteDept = async () => {
+    if (!confirm(`Delete "${dept.name}"?`)) return;
+    try {
+      await api.deleteDepartment(dept.id);
+      onRefresh();
+    } catch (err) {
+      alert("Delete failed: " + err.message);
+    }
+  };
+
+  const addPhoto = () => {
+    // Create a placeholder photo card — actual upload happens via PhotoCard
+    onUpdate({
+      ...dept,
+      photos: [...photos, {
+        id: null, title: "", notes: "", completed: false,
+        isReference: false, hasPhoto: false, linkedItemIds: [], tag: null
+      }]
+    });
+  };
+
+  const updatePhoto = async (photo) => {
+    if (photo.id) {
+      try {
+        await api.updatePhoto(photo.id, {
+          title: photo.title,
+          notes: photo.notes,
+          completed: photo.completed,
+          is_reference: photo.isReference || photo.is_reference,
+          tag: photo.tag,
+        });
+      } catch {}
+    }
+    onUpdate({ ...dept, photos: photos.map(p => (p.id === photo.id || (!p.id && !photo.id)) ? photo : p) });
+  };
+
+  const deletePhoto = async (photo) => {
+    if (!confirm("Delete this photo?")) return;
+    if (photo.id) {
+      try { await api.deletePhoto(photo.id); } catch {}
+    }
+    onUpdate({ ...dept, photos: photos.filter(p => p !== photo) });
+    onRefresh();
+  };
+
+  return (
+    <div style={{
+      marginBottom: 22, background: C.sidebar, borderRadius: 12,
+      border: `1px solid ${C.border}`, overflow: "hidden"
+    }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 11, padding: "12px 16px",
+        cursor: "pointer", background: `${color}0c`,
+        borderBottom: open ? `1px solid ${C.border}` : "none",
+        minHeight: 48
+      }}
+        onClick={() => !renaming && setOpen(o => !o)}>
+        <div style={{ width: 11, height: 11, borderRadius: "50%", background: color, flexShrink: 0 }} />
+
+        {renaming ? (
+          <input value={draftName}
+            onChange={e => setDraftName(e.target.value)}
+            onClick={e => e.stopPropagation()} autoFocus
+            onKeyDown={e => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") setRenaming(false); }}
+            onBlur={handleRename}
+            style={{
+              flex: 1, background: C.bg, border: `1px solid ${color}`, borderRadius: 5,
+              color: C.text, padding: "3px 10px", fontSize: 14, fontWeight: 700, outline: "none"
+            }} />
+        ) : (
+          <span style={{ ...TF, fontSize: 18, fontWeight: 700, color: C.text, flex: 1 }}>{dept.name}</span>
+        )}
+
+        <span style={{ fontSize: 11, color: C.muted }}>{done}/{photos.length} done</span>
+
+        <div style={{ width: 70, height: 4, background: C.borderLight, borderRadius: 2, overflow: "hidden" }}>
+          <div style={{
+            height: "100%",
+            width: `${photos.length > 0 ? (done / photos.length) * 100 : 0}%`,
+            background: color, borderRadius: 2, transition: "width 0.3s"
+          }} />
+        </div>
+
+        <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+          <button onClick={() => { setRenaming(r => !r); setDraftName(dept.name); }}
+            style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, minWidth: 30, minHeight: 30 }}>✏️</button>
+          <button onClick={handleDeleteDept}
+            style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, minWidth: 30, minHeight: 30 }}>🗑️</button>
+        </div>
+
+        <span style={{ color: C.faint, fontSize: 13 }}>{open ? "▲" : "▼"}</span>
+      </div>
+
+      {/* Photo grid */}
+      {open && (
+        <div style={{ padding: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(215px, 1fr))", gap: 12 }}>
+            {photos.map((photo, idx) => (
+              <PhotoCard
+                key={photo.id || `new-${idx}`}
+                photo={photo}
+                allItems={allItems}
+                color={color}
+                jobId={jobId}
+                deptId={dept.id}
+                onUpdate={updatePhoto}
+                onDelete={() => deletePhoto(photo)}
+              />
+            ))}
+            <div onClick={addPhoto} style={{
+              minHeight: 195, border: `2px dashed ${C.border}`, borderRadius: 10,
+              display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "center", gap: 8, cursor: "pointer", color: C.faint,
+              transition: "all 0.15s"
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.color = color; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.faint; }}>
+              <span style={{ fontSize: 28 }}>+</span>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>Add Photo</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

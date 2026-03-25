@@ -1,0 +1,312 @@
+import React, { useState } from 'react';
+import { C, TF, MF, getItemStatus } from '../tokens';
+import { Btn, Inp, Modal } from './ui';
+import { api } from '../api';
+import ReceiptLogImport from './ReceiptLogImport';
+
+function NewJobModal({ onSave, onClose }) {
+  const [f, setF] = useState({
+    name: "", store: "", storeNumber: "", location: "",
+    fileRef: "", date: new Date().toISOString().slice(0, 10)
+  });
+  const s = k => v => setF(p => ({ ...p, [k]: v }));
+  return (
+    <Modal title="New Job" onClose={onClose} width={480}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <Inp label="Job Name *" value={f.name} onChange={s("name")} placeholder="TJ MAXX - Hybla Valley Remodel" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Inp label="Store / Chain *" value={f.store} onChange={s("store")} placeholder="TJ MAXX" />
+          <Inp label="Store #" value={f.storeNumber} onChange={s("storeNumber")} placeholder="0092" mono />
+        </div>
+        <Inp label="Location" value={f.location} onChange={s("location")} placeholder="Hybla Valley, VA" />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Inp label="File Reference" value={f.fileRef} onChange={s("fileRef")} placeholder="T0092Rem" mono />
+          <Inp label="Date" type="date" value={f.date} onChange={s("date")} />
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 4 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          <Btn variant="primary" disabled={!f.name.trim() || !f.store.trim()} onClick={() => onSave(f)}>Create Job</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ChangePinModal({ onClose }) {
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleChange = async () => {
+    setError('');
+    if (!/^\d{4}$/.test(currentPin)) { setError('Current PIN must be 4 digits'); return; }
+    if (!/^\d{4}$/.test(newPin)) { setError('New PIN must be 4 digits'); return; }
+    if (newPin !== confirmPin) { setError('New PINs do not match'); return; }
+    try {
+      const result = await api.auth.change(currentPin, newPin);
+      if (!result.valid) { setError('Current PIN is incorrect'); return; }
+      setSuccess(true);
+      setTimeout(onClose, 1200);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const pinInputStyle = {
+    ...MF, fontSize: 20, textAlign: 'center', letterSpacing: '0.3em',
+    width: '100%', padding: '10px 12px', borderRadius: 8,
+    background: C.bg, border: `1px solid ${C.border}`, color: C.text,
+    outline: 'none',
+  };
+
+  return (
+    <Modal title="Change PIN" onClose={onClose} width={360}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {success ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: C.green, fontWeight: 700, fontSize: 14 }}>
+            PIN changed successfully
+          </div>
+        ) : (
+          <>
+            <div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, fontWeight: 600 }}>Current PIN</div>
+              <input type="password" inputMode="numeric" maxLength={4} value={currentPin}
+                onChange={e => setCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                style={pinInputStyle} placeholder="----" autoFocus />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, fontWeight: 600 }}>New PIN</div>
+              <input type="password" inputMode="numeric" maxLength={4} value={newPin}
+                onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                style={pinInputStyle} placeholder="----" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 4, fontWeight: 600 }}>Confirm New PIN</div>
+              <input type="password" inputMode="numeric" maxLength={4} value={confirmPin}
+                onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                style={pinInputStyle} placeholder="----" />
+            </div>
+            {error && <div style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>{error}</div>}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
+              <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+              <Btn variant="primary" onClick={handleChange}>Change PIN</Btn>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDeleteJob, mobileOpen, onCloseMobile }) {
+  const [showNewJob, setShowNewJob] = useState(false);
+  const [showChangePin, setShowChangePin] = useState(false);
+  const [showReceiptImport, setShowReceiptImport] = useState(false);
+
+  const handleNewJob = (data) => {
+    onNewJob(data);
+    setShowNewJob(false);
+  };
+
+  const handleDelete = (e, jobId) => {
+    e.stopPropagation();
+    if (confirm("Delete this job and all its data?")) {
+      onDeleteJob(jobId);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const data = await api.exportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sitekit-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Export failed: ' + err.message);
+    }
+  };
+
+  const sidebarContent = (
+    <div style={{
+      width: 252, background: C.sidebar, borderRight: `1px solid ${C.border}`,
+      display: "flex", flexDirection: "column", flexShrink: 0, height: "100%"
+    }}>
+      {/* Logo */}
+      <div style={{ padding: "17px 16px 13px", borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ ...TF, fontSize: 23, fontWeight: 700, color: C.accent }}>
+          SITE<span style={{ color: C.text }}>KIT</span>
+        </div>
+        <div style={{ fontSize: 10, color: C.muted, marginTop: 1, letterSpacing: "0.04em" }}>
+          Jobsite Command Center
+        </div>
+      </div>
+
+      {/* Jobs list */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+        <div style={{
+          padding: "4px 15px 6px", fontSize: 9, fontWeight: 700,
+          color: C.faint, textTransform: "uppercase", letterSpacing: "0.12em"
+        }}>
+          Jobs ({jobs.length})
+        </div>
+
+        {jobs.length === 0 && (
+          <div style={{
+            padding: "20px 15px", color: C.muted, fontSize: 12,
+            textAlign: "center", lineHeight: 1.8
+          }}>
+            No jobs yet. Create your first job.
+          </div>
+        )}
+
+        {jobs.map(job => {
+          const isActive = job.id === activeJobId;
+          const items = job.items || [];
+          const itemCount = job.item_count ?? items.length;
+          const issueCount = job.issue_count ?? items.filter(i => getItemStatus(i) === "issue").length;
+          const sectionCount = job.section_count ?? [...new Set(items.map(i => i.section).filter(Boolean))].length;
+          const deptCount = job.dept_count ?? (job.departments || []).length;
+          const photoCount = job.photo_count ?? (job.departments || []).reduce((a, d) => a + (d.photos || []).length, 0);
+          const donePhotos = job.done_photo_count ?? (job.departments || []).reduce((a, d) => a + (d.photos || []).filter(p => p.completed).length, 0);
+
+          return (
+            <div key={job.id} onClick={() => { onSelectJob(job.id); if (onCloseMobile) onCloseMobile(); }}
+              style={{
+                padding: "9px 15px", cursor: "pointer",
+                background: isActive ? C.accentDim : "transparent",
+                borderLeft: `3px solid ${isActive ? C.accent : "transparent"}`,
+                transition: "background 0.12s", minHeight: 44
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 13, fontWeight: 700,
+                    color: isActive ? C.accent : C.text,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                  }}>
+                    {job.name}
+                  </div>
+                  <div style={{
+                    fontSize: 11, color: C.muted, marginTop: 1,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                  }}>
+                    {job.location || job.store}
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10, color: C.muted }}>{itemCount} items</span>
+                    {sectionCount > 0 && <span style={{ fontSize: 10, color: C.teal }}>📂 {sectionCount} sections</span>}
+                    {issueCount > 0 && <span style={{ fontSize: 10, color: C.red, fontWeight: 700 }}>⚠ {issueCount}</span>}
+                    {photoCount > 0 && <span style={{ fontSize: 10, color: C.muted }}>📷 {donePhotos}/{photoCount}</span>}
+                  </div>
+                </div>
+                <button onClick={e => handleDelete(e, job.id)}
+                  style={{
+                    background: "none", border: "none", color: C.muted,
+                    cursor: "pointer", fontSize: 13, opacity: 0.35,
+                    padding: "2px 4px", minWidth: 30, minHeight: 30
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                  onMouseLeave={e => e.currentTarget.style.opacity = "0.35"}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer actions */}
+      <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => {
+            sessionStorage.removeItem('sitekit_unlocked');
+            window.location.reload();
+          }} style={{
+            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
+            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
+            fontFamily: "inherit",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+          >
+            🔒 Lock
+          </button>
+          <button onClick={() => setShowChangePin(true)} style={{
+            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
+            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
+            fontFamily: "inherit",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+          >
+            Change PIN
+          </button>
+          <button onClick={() => setShowReceiptImport(true)} style={{
+            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
+            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
+            fontFamily: "inherit",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+            title="Import from ReceiptLog"
+          >
+            ⬆ Import
+          </button>
+          <button onClick={handleExport} style={{
+            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
+            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
+            fontFamily: "inherit", marginLeft: "auto",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+          >
+            💾
+          </button>
+        </div>
+        <Btn variant="primary" full icon="+" onClick={() => setShowNewJob(true)}>New Job</Btn>
+      </div>
+
+      {showNewJob && <NewJobModal onSave={handleNewJob} onClose={() => setShowNewJob(false)} />}
+      {showChangePin && <ChangePinModal onClose={() => setShowChangePin(false)} />}
+      {showReceiptImport && <ReceiptLogImport onClose={() => setShowReceiptImport(false)} onImport={() => setShowReceiptImport(false)} />}
+    </div>
+  );
+
+  // Desktop: render sidebar directly
+  // Mobile: render as overlay drawer
+  return (
+    <nav>
+      {/* Desktop sidebar */}
+      <div className="desktop-only" style={{ display: "flex", flexShrink: 0 }}>
+        {sidebarContent}
+      </div>
+
+      {/* Mobile drawer overlay */}
+      {mobileOpen && (
+        <div className="mobile-only" style={{
+          position: "fixed", inset: 0, zIndex: 150,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)"
+        }} onClick={onCloseMobile}>
+          <div onClick={e => e.stopPropagation()} style={{
+            position: "absolute", left: 0, top: 0, bottom: 0,
+            width: 280, maxWidth: "85vw"
+          }} className="fade-in">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+}
