@@ -4,7 +4,7 @@ import { Btn, Inp, Modal } from './ui';
 import { api } from '../api';
 import ReceiptLogImport from './ReceiptLogImport';
 
-function NewJobModal({ onSave, onClose }) {
+export function NewJobModal({ onSave, onClose }) {
   const [f, setF] = useState({
     name: "", store: "", storeNumber: "", location: "",
     fileRef: "", date: new Date().toISOString().slice(0, 10)
@@ -225,57 +225,27 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
 
       {/* Footer actions */}
       <div style={{ padding: 12, borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => {
-            sessionStorage.removeItem('sitekit_unlocked');
-            window.location.reload();
-          }} style={{
-            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
-            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
-            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
-            fontFamily: "inherit",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-          >
-            🔒 Lock
-          </button>
-          <button onClick={() => setShowChangePin(true)} style={{
-            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
-            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
-            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
-            fontFamily: "inherit",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-          >
-            Change PIN
-          </button>
-          <button onClick={() => setShowReceiptImport(true)} style={{
-            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
-            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
-            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
-            fontFamily: "inherit",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-            title="Import from ReceiptLog"
-          >
-            ⬆ Import
-          </button>
-          <button onClick={handleExport} style={{
-            background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
-            color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 10px",
-            display: "flex", alignItems: "center", gap: 4, minHeight: 32,
-            fontFamily: "inherit", marginLeft: "auto",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
-          >
-            💾
-          </button>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          {[
+            { icon: "🔒", label: "Lock", tutorial: "lock", onClick: () => { sessionStorage.removeItem('sitekit_unlocked'); window.location.reload(); } },
+            { icon: "🔑", label: "PIN", onClick: () => setShowChangePin(true) },
+            { icon: "📥", label: "ReceiptLog", onClick: () => setShowReceiptImport(true) },
+            { icon: "💾", label: "Backup", tutorial: "backup", onClick: handleExport },
+          ].map(btn => (
+            <button key={btn.label} onClick={btn.onClick} data-tutorial={btn.tutorial || undefined} style={{
+              background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
+              color: C.muted, cursor: "pointer", fontSize: 11, padding: "6px 8px",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 4, minHeight: 32,
+              fontFamily: "inherit",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}
+            >
+              {btn.icon} {btn.label}
+            </button>
+          ))}
         </div>
-        <Btn variant="primary" full icon="+" onClick={() => setShowNewJob(true)}>New Job</Btn>
+        <Btn variant="primary" full icon="+" onClick={() => setShowNewJob(true)} data-tutorial="new-job">New Job</Btn>
       </div>
 
       {showNewJob && <NewJobModal onSave={handleNewJob} onClose={() => setShowNewJob(false)} />}

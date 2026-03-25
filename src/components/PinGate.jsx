@@ -13,7 +13,7 @@ function PinDots({ digits, error }) {
       {Array.from({ length: NUM_DIGITS }).map((_, i) => (
         <div key={i} style={{
           width: 20, height: 20, borderRadius: '50%',
-          border: `2px solid ${digits[i] != null ? C.accent : C.border}`,
+          border: `2px solid ${digits[i] != null ? C.accent : C.faint}`,
           background: digits[i] != null ? C.accent : 'transparent',
           transition: 'all 0.15s ease',
         }} />
@@ -31,7 +31,7 @@ function PinBoxes({ digits, error }) {
       {Array.from({ length: NUM_DIGITS }).map((_, i) => (
         <div key={i} style={{
           width: 52, height: 60, borderRadius: 10,
-          border: `2px solid ${digits[i] != null ? C.accent : C.border}`,
+          border: `2px solid ${digits[i] != null ? C.accent : C.faint}`,
           background: C.card,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           ...MF, fontSize: 28, fontWeight: 700, color: C.text,

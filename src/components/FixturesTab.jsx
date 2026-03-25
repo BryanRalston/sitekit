@@ -167,7 +167,7 @@ export default function FixturesTab({ job, onRefresh }) {
 
           {/* Row 2: Primary actions */}
           <div style={{ padding: "4px 14px 10px", display: "flex", gap: 8 }}>
-            <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Import</Btn>
+            <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Import</Btn>
             <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Add Item</Btn>
           </div>
 
@@ -178,7 +178,7 @@ export default function FixturesTab({ job, onRefresh }) {
               borderRadius: 10, display: "flex", flexDirection: "column", gap: 12
             }}>
               {/* Status filter pills */}
-              <div>
+              <div data-tutorial="status-filters">
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Status</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {["all", "pending", "partial", "received", "issue", "overdue"].map(f => {
@@ -227,7 +227,7 @@ export default function FixturesTab({ job, onRefresh }) {
               </div>
 
               {/* Report button in filter panel */}
-              <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} style={{ minHeight: 44 }}>Report</Btn>
+              <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} data-tutorial="report" style={{ minHeight: 44 }}>Report</Btn>
             </div>
           )}
         </div>
@@ -251,6 +251,7 @@ export default function FixturesTab({ job, onRefresh }) {
           </div>
 
           {/* Status filters */}
+          <div data-tutorial="status-filters" style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
           {["all", "pending", "partial", "received", "issue", "overdue"].map(f => {
             const cnt = f === "all" ? items.length : items.filter(i => getItemStatus(i) === f).length;
             if (f !== "all" && cnt === 0) return null;
@@ -266,6 +267,7 @@ export default function FixturesTab({ job, onRefresh }) {
               </button>
             );
           })}
+          </div>
 
           <div style={{ height: 20, width: 1, background: C.border, flexShrink: 0 }} />
 
@@ -290,8 +292,8 @@ export default function FixturesTab({ job, onRefresh }) {
           <div style={{ height: 20, width: 1, background: C.border, flexShrink: 0 }} />
           <Toggle checked={showQtyCol} onChange={setShowQtyCol} label="Ord. Qty" />
           <Toggle checked={bulkMode} onChange={v => { setBulkMode(v); setSelectedIds(new Set()); }} label="Bulk" />
-          <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)}>Import</Btn>
-          <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)}>Report</Btn>
+          <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import">Import</Btn>
+          <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} data-tutorial="report">Report</Btn>
           <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})}>Add Item</Btn>
         </div>
       )}
@@ -360,7 +362,7 @@ export default function FixturesTab({ job, onRefresh }) {
       </div>
 
       {/* Rows */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
         {Object.entries(grouped).length === 0 ? (
           <div style={{ padding: 56, textAlign: "center", color: C.muted }}>
             <div style={{ fontSize: 34, marginBottom: 11 }}>📋</div>
@@ -391,18 +393,20 @@ export default function FixturesTab({ job, onRefresh }) {
                   ({gitems.length})
                 </span>
               </div>
-              {gitems.map(item => (
+              {gitems.map((item, itemIdx) => (
                 <React.Fragment key={item.id}>
-                  <ItemRow
-                    item={item}
-                    onEdit={handleItemClick}
-                    onQuickReceive={() => setQuickReceiveId(quickReceiveId === item.id ? null : item.id)}
-                    showQtyCol={showQtyCol}
-                    groupBy={groupBy}
-                    bulkMode={bulkMode}
-                    isSelected={selectedIds.has(item.id)}
-                    onToggleSelect={toggleSelect}
-                  />
+                  <div data-tutorial={itemIdx === 0 ? "item-row" : undefined}>
+                    <ItemRow
+                      item={item}
+                      onEdit={handleItemClick}
+                      onQuickReceive={() => setQuickReceiveId(quickReceiveId === item.id ? null : item.id)}
+                      showQtyCol={showQtyCol}
+                      groupBy={groupBy}
+                      bulkMode={bulkMode}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggleSelect={toggleSelect}
+                    />
+                  </div>
                   {quickReceiveId === item.id && !bulkMode && (
                     <QuickReceive
                       item={item}

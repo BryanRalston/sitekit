@@ -1,7 +1,7 @@
 import React from 'react';
 import { C } from '../../tokens';
 
-export default function Btn({ children, onClick, variant = "primary", size = "md", disabled, icon, full, style: sty }) {
+export default function Btn({ children, onClick, variant = "primary", size = "md", disabled, icon, full, style: sty, ...rest }) {
   const V = {
     primary: { background: C.accent, color: "#1a1a1a", border: "none" },
     ghost:   { background: "transparent", color: C.muted, border: `1px solid ${C.border}` },
@@ -18,7 +18,7 @@ export default function Btn({ children, onClick, variant = "primary", size = "md
     lg: { padding: "10px 22px", fontSize: 14 },
   };
   return (
-    <button onClick={onClick} disabled={disabled} style={{
+    <button onClick={onClick} disabled={disabled} {...rest} style={{
       display: "inline-flex", alignItems: "center", gap: 6,
       cursor: disabled ? "not-allowed" : "pointer",
       borderRadius: 6, fontWeight: 600, transition: "opacity 0.15s",

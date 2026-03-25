@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { C, TF, MF } from './tokens';
 import { Btn } from './components/ui';
-import Sidebar from './components/Sidebar';
+import Sidebar, { NewJobModal } from './components/Sidebar';
 import FixturesTab from './components/FixturesTab';
 import VisualRefTab from './components/VisualRefTab';
 import ReceiptsTab from './components/ReceiptsTab';
 import PinGate from './components/PinGate';
+import Tutorial, { TutorialPrompt } from './components/Tutorial';
 import { api } from './api';
 import { useMobile } from './hooks/useApi';
+import { getOne, put } from './db';
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(false);
@@ -17,6 +19,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showWelcomeNewJob, setShowWelcomeNewJob] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
   const isMobile = useMobile();
 
   // Full job data (with items + departments) for the active job
@@ -58,6 +63,14 @@ export default function App() {
       setLoading(false);
     });
   }, []);
+
+  // Check tutorial completion on mount (after unlock)
+  useEffect(() => {
+    if (!unlocked || loading) return;
+    getOne('config', 'tutorial_completed').then(result => {
+      if (!result) setShowTutorialPrompt(true);
+    }).catch(() => {});
+  }, [unlocked, loading]);
 
   // Reload full job when active job changes
   useEffect(() => {
@@ -152,9 +165,15 @@ export default function App() {
           }}>
             ☰
           </button>
-          <div style={{ ...TF, fontSize: 18, fontWeight: 700, color: C.accent }}>
+          <div style={{ ...TF, fontSize: 18, fontWeight: 700, color: C.accent, flex: 1 }}>
             SITE<span style={{ color: C.text }}>KIT</span>
           </div>
+          <button onClick={() => setShowTutorial(true)} style={{
+            background: 'none', border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.muted, cursor: 'pointer', fontSize: 15, fontWeight: 700,
+            minWidth: 36, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'inherit',
+          }}>?</button>
         </div>
 
         {/* Error banner */}
@@ -224,13 +243,17 @@ export default function App() {
               </div>
             </div>
 
-            <Btn variant="primary" size="lg" icon="＋" onClick={() => {
-              if (isMobile) setMobileMenuOpen(true);
-              else setMobileMenuOpen(true);
-            }}
+            <Btn variant="primary" size="lg" icon="＋" onClick={() => setShowWelcomeNewJob(true)}
               style={{ marginTop: 8, minHeight: 50, fontSize: 16, padding: "12px 28px" }}>
               Get Started
             </Btn>
+
+            {showWelcomeNewJob && (
+              <NewJobModal
+                onSave={(data) => { handleNewJob(data); setShowWelcomeNewJob(false); }}
+                onClose={() => setShowWelcomeNewJob(false)}
+              />
+            )}
           </div>
         ) : (
           <>
@@ -254,20 +277,23 @@ export default function App() {
                 {[
                   {
                     id: "fixtures", icon: "📋", label: "Fixtures",
-                    count: (activeJobFull.items || []).length
+                    count: (activeJobFull.items || []).length,
+                    tutorial: null
                   },
                   {
-                    id: "visual", icon: "🖼", label: "Visual Reference",
-                    count: (activeJobFull.departments || []).reduce((a, d) => a + (d.photos || []).length, 0)
+                    id: "visual", icon: "🖼", label: isMobile ? "Photos" : "Visual Reference",
+                    count: (activeJobFull.departments || []).reduce((a, d) => a + (d.photos || []).length, 0),
+                    tutorial: "tab-visual"
                   },
                   {
                     id: "receipts", icon: "🧾", label: "Receipts",
-                    count: (activeJobFull.receipts || []).length
+                    count: (activeJobFull.receipts || []).length,
+                    tutorial: "tab-receipts"
                   },
                 ].map(tab => {
                   const isA = activeTab === tab.id;
                   return (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                    <button key={tab.id} onClick={() => setActiveTab(tab.id)} data-tutorial={tab.tutorial || undefined} style={{
                       padding: "8px 17px", borderRadius: "8px 8px 0 0", cursor: "pointer",
                       background: isA ? C.bg : "transparent",
                       border: `1px solid ${isA ? C.border : "transparent"}`,
@@ -316,6 +342,20 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* Tutorial */}
+      {showTutorial && (
+        <Tutorial onClose={() => setShowTutorial(false)} />
+      )}
+      {showTutorialPrompt && !showTutorial && (
+        <TutorialPrompt
+          onStart={() => { setShowTutorialPrompt(false); setShowTutorial(true); }}
+          onDismiss={async () => {
+            setShowTutorialPrompt(false);
+            try { await put('config', { key: 'tutorial_completed', value: true }); } catch (_) {}
+          }}
+        />
+      )}
     </div>
   );
 }
