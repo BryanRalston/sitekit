@@ -82,13 +82,17 @@ function AppInner() {
     });
   }, []);
 
-  // Load crew member count for tab badge
-  useEffect(() => {
-    if (!unlocked || loading) return;
+  // Load crew member count for tab badge — refresh on tab switch
+  const refreshCrewCount = useCallback(() => {
     api.getCrewMembers?.().then(members => {
       setCrewCount((members || []).filter(m => m.active !== false).length);
     }).catch(() => {});
-  }, [unlocked, loading]);
+  }, []);
+
+  useEffect(() => {
+    if (!unlocked || loading) return;
+    refreshCrewCount();
+  }, [unlocked, loading, activeTab, refreshCrewCount]);
 
   // Check tutorial completion on mount (after unlock)
   useEffect(() => {
@@ -246,7 +250,7 @@ function AppInner() {
           <div style={{ ...TF, fontSize: 18, fontWeight: 700, color: C.accent, flex: 1 }}>
             SITE<span style={{ color: C.text }}>KIT</span>
           </div>
-          <button onClick={() => setShowGlobalSearch(true)} style={{
+          <button data-tutorial="global-search" onClick={() => setShowGlobalSearch(true)} style={{
             background: 'none', border: `1px solid ${C.border}`, borderRadius: 6,
             color: C.muted, cursor: 'pointer', fontSize: 15,
             minWidth: 36, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -437,7 +441,7 @@ function AppInner() {
                     <ReceiptsTab key={activeJobId + "-r"} job={activeJobFull} onRefresh={refresh} />
                   )}
                   {activeTab === "crew" && (
-                    <CrewTab key={activeJobId + "-c"} job={activeJobFull} />
+                    <CrewTab key={activeJobId + "-c"} job={activeJobFull} onCrewChange={refreshCrewCount} />
                   )}
                 </>
               )}

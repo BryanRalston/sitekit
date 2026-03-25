@@ -21,7 +21,7 @@ function formatWeekRange(weekStart) {
   return `${startStr} – ${endStr}`;
 }
 
-export default function CrewTab({ job }) {
+export default function CrewTab({ job, onCrewChange }) {
   const isMobile = useMobile();
   const { toast } = useToast();
 
@@ -207,6 +207,7 @@ export default function CrewTab({ job }) {
         await api.createCrewMember(data);
       }
       await loadCrew();
+      onCrewChange?.();
     } catch (err) {
       toast.error('Save failed: ' + err.message);
       throw err; // re-throw so the modal knows it failed
@@ -217,6 +218,7 @@ export default function CrewTab({ job }) {
     try {
       await api.deleteCrewMember(id);
       await loadCrew();
+      onCrewChange?.();
     } catch (err) {
       toast.error('Delete failed: ' + err.message);
       throw err;

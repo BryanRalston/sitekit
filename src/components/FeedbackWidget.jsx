@@ -38,6 +38,7 @@ export default function FeedbackWidget({ currentTab }) {
     <>
       {/* Floating button */}
       <button
+        data-tutorial="feedback-btn"
         onClick={() => setOpen(true)}
         aria-label="Submit feedback"
         style={{
