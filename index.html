@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0d1117" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="manifest" href="/sitekit/manifest.json" />
+  <link rel="manifest" href="./manifest.json" />
   <title>SiteKit</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,7 +17,8 @@
   <div id="root"></div>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      const base = document.querySelector('base')?.href || location.pathname.replace(/\/[^/]*$/, '/');
+      navigator.serviceWorker.register(base + 'sw.js').catch(() => {});
     }
   </script>
 </body>
