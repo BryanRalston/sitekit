@@ -48,6 +48,14 @@ export const DEPT_COLORS = [
   "#34d399", "#60a5fa", "#fbbf24", "#e879f9", "#fb923c",
 ];
 
+export const ROLE_COLORS = {
+  Lead:       { color: C.purple,  bg: C.purpleDim,  border: C.purpleBorder },
+  Journeyman: { color: C.blue,   bg: C.blueDim,    border: C.blueBorder },
+  Helper:     { color: C.teal,   bg: C.tealDim,    border: C.tealBorder },
+  Apprentice: { color: C.accent, bg: C.accentDim,  border: C.accentBorder },
+  Other:      { color: C.muted,  bg: 'rgba(157,165,174,0.12)', border: 'rgba(157,165,174,0.3)' },
+};
+
 export function getItemStatus(item) {
   if (item.damaged || item.missingParts) return "issue";
   const rec = parseInt(item.qtyReceived || "0");

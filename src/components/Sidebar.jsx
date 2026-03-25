@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { C, TF, MF, getItemStatus } from '../tokens';
 import { Btn, Inp, Modal } from './ui';
 import { api } from '../api';
 import { put } from '../db';
 import ReceiptLogImport from './ReceiptLogImport';
+import FeedbackViewer from './FeedbackViewer';
 import { useToast } from './Toast';
 
 function validateNewJob(f) {
@@ -142,7 +143,21 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
   const [showNewJob, setShowNewJob] = useState(false);
   const [showChangePin, setShowChangePin] = useState(false);
   const [showReceiptImport, setShowReceiptImport] = useState(false);
+  const [showFeedbackViewer, setShowFeedbackViewer] = useState(false);
   const { toast, confirm: toastConfirm } = useToast();
+
+  // Hidden admin trigger: 5 taps on logo within 3 seconds
+  const logoTapsRef = useRef([]);
+  const handleLogoTap = () => {
+    const now = Date.now();
+    logoTapsRef.current.push(now);
+    // Keep only taps within the last 3 seconds
+    logoTapsRef.current = logoTapsRef.current.filter(t => now - t < 3000);
+    if (logoTapsRef.current.length >= 5) {
+      logoTapsRef.current = [];
+      setShowFeedbackViewer(true);
+    }
+  };
 
   const handleNewJob = (data) => {
     onNewJob(data);
@@ -180,9 +195,12 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       width: 252, background: C.sidebar, borderRight: `1px solid ${C.border}`,
       display: "flex", flexDirection: "column", flexShrink: 0, height: "100%"
     }}>
-      {/* Logo */}
+      {/* Logo — 5 rapid taps opens admin feedback viewer */}
       <div style={{ padding: "17px 16px 13px", borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ ...TF, fontSize: 23, fontWeight: 700, color: C.accent }}>
+        <div
+          onClick={handleLogoTap}
+          style={{ ...TF, fontSize: 23, fontWeight: 700, color: C.accent, cursor: 'default', userSelect: 'none' }}
+        >
           SITE<span style={{ color: C.text }}>KIT</span>
         </div>
         <div style={{ fontSize: 10, color: C.muted, marginTop: 1, letterSpacing: "0.04em" }}>
@@ -294,6 +312,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       {showNewJob && <NewJobModal onSave={handleNewJob} onClose={() => setShowNewJob(false)} />}
       {showChangePin && <ChangePinModal onClose={() => setShowChangePin(false)} />}
       {showReceiptImport && <ReceiptLogImport onClose={() => setShowReceiptImport(false)} onImport={() => setShowReceiptImport(false)} />}
+      {showFeedbackViewer && <FeedbackViewer onClose={() => setShowFeedbackViewer(false)} />}
     </div>
   );
 

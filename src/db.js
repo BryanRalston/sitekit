@@ -1,6 +1,6 @@
 // ─── IndexedDB Database Layer ─────────────────────────────────────────────────
 const DB_NAME = 'sitekit';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // Schema versioning guide:
 // To add a new object store or index in a future version:
@@ -93,6 +93,39 @@ export function openDB() {
       // config (key-value store)
       if (!db.objectStoreNames.contains('config')) {
         db.createObjectStore('config', { keyPath: 'key' });
+      }
+
+      // crew_members (v2)
+      if (!db.objectStoreNames.contains('crew_members')) {
+        const crew = db.createObjectStore('crew_members', { keyPath: 'id' });
+        crew.createIndex('active', 'active', { unique: false });
+        crew.createIndex('name', 'name', { unique: false });
+      }
+
+      // time_entries (v2)
+      if (!db.objectStoreNames.contains('time_entries')) {
+        const te = db.createObjectStore('time_entries', { keyPath: 'id' });
+        te.createIndex('jobId', 'jobId', { unique: false });
+        te.createIndex('crewMemberId', 'crewMemberId', { unique: false });
+        te.createIndex('weekStart', 'weekStart', { unique: false });
+        te.createIndex('date', 'date', { unique: false });
+        te.createIndex('job_week', ['jobId', 'weekStart'], { unique: false });
+        te.createIndex('crew_date', ['crewMemberId', 'date'], { unique: false });
+      }
+
+      // shortage_resolutions (v2)
+      if (!db.objectStoreNames.contains('shortage_resolutions')) {
+        const sr = db.createObjectStore('shortage_resolutions', { keyPath: 'id' });
+        sr.createIndex('jobId', 'jobId', { unique: false });
+        sr.createIndex('weekStart', 'weekStart', { unique: false });
+        sr.createIndex('job_week', ['jobId', 'weekStart'], { unique: false });
+      }
+
+      // feedback (v2)
+      if (!db.objectStoreNames.contains('feedback')) {
+        const fb = db.createObjectStore('feedback', { keyPath: 'id' });
+        fb.createIndex('status', 'status', { unique: false });
+        fb.createIndex('createdAt', 'createdAt', { unique: false });
       }
     };
 

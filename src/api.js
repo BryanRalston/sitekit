@@ -1,5 +1,5 @@
 import { generateId, getAll, getAllByIndex, getOne, put, del, transaction, openDB } from './db.js';
-import { DEPT_COLORS } from './tokens.js';
+import { DEPT_COLORS, ROLE_COLORS } from './tokens.js';
 import { compressImage, compressReceiptImage } from './lib/image-utils.js';
 import { sanitize } from './lib/sanitize.js';
 
@@ -22,6 +22,35 @@ async function hashPin(pin) {
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+/**
+ * Get Monday of the week for a given date. ISO week (Monday start).
+ * @param {Date|string} date
+ * @returns {string} 'YYYY-MM-DD' of Monday
+ */
+function getWeekStart(date) {
+  const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : new Date(date);
+  const day = d.getDay(); // 0=Sun, 1=Mon...
+  const diff = day === 0 ? -6 : 1 - day; // if Sunday, go back 6; otherwise go back to Monday
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Get array of 6 Date objects (Mon–Sat) from a weekStart string.
+ * @param {string} weekStart 'YYYY-MM-DD' (should be a Monday)
+ * @returns {Date[]}
+ */
+function getWeekDates(weekStart) {
+  const dates = [];
+  const base = new Date(weekStart + 'T00:00:00');
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
 
 // ─── API Object ───────────────────────────────────────────────────────────────
 // Same method signatures as the old fetch-based api — components don't change.
@@ -489,6 +518,256 @@ export const api = {
     return { jobsCreated, jobsMatched, receiptsImported };
   },
 
+  // ── Crew Members ─────────────────────────────────────────────────────────
+
+  async getCrewMembers() {
+    const members = await getAll('crew_members');
+    return members.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  },
+
+  async createCrewMember({ name, role, dailyHours, active, color }) {
+    const member = {
+      id: generateId(),
+      name: sanitize(name),
+      role: sanitize(role),
+      dailyHours: parseFloat(dailyHours) || 8,
+      active: active !== undefined ? active : true,
+      color: color || (ROLE_COLORS[role] ? ROLE_COLORS[role].color : ROLE_COLORS.Other.color),
+      createdAt: new Date().toISOString(),
+    };
+    await put('crew_members', member);
+    return member;
+  },
+
+  async updateCrewMember(id, data) {
+    const existing = await getOne('crew_members', id);
+    if (!existing) throw new Error('Crew member not found');
+    const sanitized = { ...data };
+    for (const key of ['name', 'role']) {
+      if (sanitized[key] !== undefined) sanitized[key] = sanitize(sanitized[key]);
+    }
+    if (sanitized.dailyHours !== undefined) sanitized.dailyHours = parseFloat(sanitized.dailyHours) || 8;
+    const updated = { ...existing, ...sanitized, id };
+    await put('crew_members', updated);
+    return updated;
+  },
+
+  async deleteCrewMember(id) {
+    const entries = await getAllByIndex('time_entries', 'crewMemberId', id);
+    await transaction(['crew_members', 'time_entries'], 'readwrite', (s) => {
+      s.crew_members.delete(id);
+      for (const e of entries) s.time_entries.delete(e.id);
+    });
+    return { success: true };
+  },
+
+  // ── Time Entries ────────────────────────────────────────────────────────
+
+  async getTimeEntries(jobId, weekStart) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('time_entries', 'readonly');
+      const store = tx.objectStore('time_entries');
+      const index = store.index('job_week');
+      const req = index.getAll([jobId, weekStart]);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async getTimeEntriesByDate(jobId, date) {
+    const all = await getAllByIndex('time_entries', 'jobId', jobId);
+    return all.filter(e => e.date === date);
+  },
+
+  async createTimeEntry({ jobId, crewMemberId, date, weekStart, hours, clockIn, clockOut, notes, status }) {
+    const entry = {
+      id: generateId(),
+      jobId,
+      crewMemberId,
+      date: date || today(),
+      weekStart: weekStart || getWeekStart(date || today()),
+      hours: parseFloat(hours) || 0,
+      clockIn: clockIn || null,
+      clockOut: clockOut || null,
+      notes: sanitize(notes || ''),
+      status: status || 'manual',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await put('time_entries', entry);
+    return entry;
+  },
+
+  async updateTimeEntry(id, data) {
+    const existing = await getOne('time_entries', id);
+    if (!existing) throw new Error('Time entry not found');
+    const sanitized = { ...data };
+    if (sanitized.notes !== undefined) sanitized.notes = sanitize(sanitized.notes);
+    if (sanitized.hours !== undefined) sanitized.hours = parseFloat(sanitized.hours) || 0;
+    const updated = { ...existing, ...sanitized, id, updatedAt: new Date().toISOString() };
+    await put('time_entries', updated);
+    return updated;
+  },
+
+  async deleteTimeEntry(id) {
+    await del('time_entries', id);
+    return { success: true };
+  },
+
+  async clockIn(jobId, crewMemberId) {
+    // Guard: prevent duplicate clock-ins
+    const existing = await this.getActiveClock(crewMemberId);
+    if (existing) return existing; // idempotent — return the active clock
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const entry = {
+      id: generateId(),
+      jobId,
+      crewMemberId,
+      date: dateStr,
+      weekStart: getWeekStart(dateStr),
+      hours: 0,
+      clockIn: now.toISOString(),
+      clockOut: null,
+      notes: '',
+      status: 'clocked',
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+    await put('time_entries', entry);
+    return entry;
+  },
+
+  async clockOut(crewMemberId, jobId) {
+    const entries = await getAllByIndex('time_entries', 'crewMemberId', crewMemberId);
+    const open = entries.find(e => e.clockIn && !e.clockOut && (!jobId || e.jobId === jobId));
+    if (!open) throw new Error('No active clock entry found');
+    const now = new Date();
+    const clockInTime = new Date(open.clockIn);
+    const diffMs = now - clockInTime;
+    const hours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100; // 2 decimal places
+    open.clockOut = now.toISOString();
+    open.hours = hours;
+    open.updatedAt = now.toISOString();
+    await put('time_entries', open);
+    return open;
+  },
+
+  async getActiveClock(crewMemberId) {
+    const entries = await getAllByIndex('time_entries', 'crewMemberId', crewMemberId);
+    return entries.find(e => e.clockIn && !e.clockOut) || null;
+  },
+
+  // ── Week Summary ────────────────────────────────────────────────────────
+
+  async getWeekSummary(jobId, weekStart, crewMembers) {
+    const entries = await this.getTimeEntries(jobId, weekStart);
+    const dates = getWeekDates(weekStart);
+    const dateStrings = dates.map(d => d.toISOString().slice(0, 10));
+
+    return crewMembers.map(cm => {
+      const memberEntries = entries.filter(e => e.crewMemberId === cm.id);
+      const dailyBreakdown = dateStrings.map(dateStr => {
+        const dayEntries = memberEntries.filter(e => e.date === dateStr);
+        const totalHours = dayEntries.reduce((s, e) => s + (e.hours || 0), 0);
+        const lastEntry = dayEntries[dayEntries.length - 1];
+        return {
+          date: dateStr,
+          hours: totalHours,
+          clockIn: lastEntry?.clockIn || null,
+          clockOut: lastEntry?.clockOut || null,
+          notes: dayEntries.map(e => e.notes).filter(Boolean).join('; '),
+        };
+      });
+      const totalWorked = dailyBreakdown.reduce((s, d) => s + d.hours, 0);
+      const totalRequired = (cm.dailyHours || 8) * 5; // Mon-Fri only; Saturday is overtime
+      return {
+        crewMemberId: cm.id,
+        name: cm.name,
+        role: cm.role,
+        dailyHours: cm.dailyHours || 8,
+        totalWorked,
+        totalRequired,
+        balance: totalWorked - totalRequired,
+        dailyBreakdown,
+      };
+    });
+  },
+
+  // ── Shortage Resolutions ────────────────────────────────────────────────
+
+  async getResolutions(jobId, weekStart) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('shortage_resolutions', 'readonly');
+      const store = tx.objectStore('shortage_resolutions');
+      const index = store.index('job_week');
+      const req = index.getAll([jobId, weekStart]);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async resolveShortage({ jobId, crewMemberId, weekStart, shortageHours, resolution, notes }) {
+    const record = {
+      id: generateId(),
+      jobId,
+      crewMemberId,
+      weekStart,
+      shortageHours: parseFloat(shortageHours) || 0,
+      resolution: sanitize(resolution),
+      notes: sanitize(notes || ''),
+      createdAt: new Date().toISOString(),
+    };
+    await put('shortage_resolutions', record);
+    return record;
+  },
+
+  async deleteResolution(id) {
+    await del('shortage_resolutions', id);
+    return { success: true };
+  },
+
+  // ── Crew Utilities (exposed for components) ─────────────────────────────
+
+  getWeekStart,
+  getWeekDates,
+
+  // ── Feedback ──────────────────────────────────────────────────────────────
+
+  async submitFeedback(data) {
+    const entry = {
+      id: generateId(),
+      type: data.type || 'feedback', // 'feedback' | 'bug' | 'feature'
+      message: sanitize(data.message),
+      page: data.page || '', // which tab/screen the user was on
+      createdAt: new Date().toISOString(),
+      status: 'new', // 'new' | 'reviewed' | 'resolved'
+    };
+    await put('feedback', entry);
+    return entry;
+  },
+
+  async getFeedback() {
+    const all = await getAll('feedback');
+    return all.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  },
+
+  async updateFeedbackStatus(id, status) {
+    const entry = await getOne('feedback', id);
+    if (!entry) throw new Error('Feedback not found');
+    entry.status = status;
+    await put('feedback', entry);
+    return entry;
+  },
+
+  async deleteFeedback(id) {
+    await del('feedback', id);
+    return { success: true };
+  },
+
   // ── Export ────────────────────────────────────────────────────────────────
 
   async exportData() {
@@ -498,6 +777,10 @@ export const api = {
     const photos = await getAll('photos');
     const receipts = await getAll('receipts');
     const fk = await getAll('fixture_knowledge');
+    const crewMembers = await getAll('crew_members');
+    const timeEntries = await getAll('time_entries');
+    const shortageResolutions = await getAll('shortage_resolutions');
+    const feedback = await getAll('feedback');
     return {
       exportDate: new Date().toISOString(), version: '1.0', app: 'SiteKit',
       jobs: jobs.map(j => ({
@@ -507,6 +790,10 @@ export const api = {
         receipts: receipts.filter(r => r.jobId === j.id),
       })),
       fixtureKnowledge: fk,
+      crewMembers,
+      timeEntries,
+      shortageResolutions,
+      feedback,
     };
   },
 

@@ -5,9 +5,11 @@ import Sidebar, { NewJobModal } from './components/Sidebar';
 import FixturesTab from './components/FixturesTab';
 import VisualRefTab from './components/VisualRefTab';
 import ReceiptsTab from './components/ReceiptsTab';
+import CrewTab from './components/CrewTab';
 import PinGate from './components/PinGate';
 import Tutorial, { TutorialPrompt } from './components/Tutorial';
 import GlobalSearch from './components/GlobalSearch';
+import FeedbackWidget from './components/FeedbackWidget';
 import { ToastProvider, useToast } from './components/Toast';
 import { SkeletonList } from './components/Skeleton';
 import { api } from './api';
@@ -40,6 +42,9 @@ function AppInner() {
   // Full job data (with items + departments) for the active job
   const [activeJobFull, setActiveJobFull] = useState(null);
   const [jobLoading, setJobLoading] = useState(false);
+
+  // Crew member count for tab badge
+  const [crewCount, setCrewCount] = useState(0);
 
   // Load job list
   const loadJobs = useCallback(async () => {
@@ -76,6 +81,14 @@ function AppInner() {
       setLoading(false);
     });
   }, []);
+
+  // Load crew member count for tab badge
+  useEffect(() => {
+    if (!unlocked || loading) return;
+    api.getCrewMembers?.().then(members => {
+      setCrewCount((members || []).filter(m => m.active !== false).length);
+    }).catch(() => {});
+  }, [unlocked, loading]);
 
   // Check tutorial completion on mount (after unlock)
   useEffect(() => {
@@ -362,6 +375,11 @@ function AppInner() {
                     count: (activeJobFull.receipts || []).length,
                     tutorial: "tab-receipts"
                   },
+                  {
+                    id: "crew", icon: "👷", label: "Crew",
+                    count: crewCount,
+                    tutorial: "tab-crew"
+                  },
                 ].map(tab => {
                   const isA = activeTab === tab.id;
                   return (
@@ -418,6 +436,9 @@ function AppInner() {
                   {activeTab === "receipts" && (
                     <ReceiptsTab key={activeJobId + "-r"} job={activeJobFull} onRefresh={refresh} />
                   )}
+                  {activeTab === "crew" && (
+                    <CrewTab key={activeJobId + "-c"} job={activeJobFull} />
+                  )}
                 </>
               )}
             </div>
@@ -447,6 +468,9 @@ function AppInner() {
           }}
         />
       )}
+
+      {/* Feedback Widget */}
+      <FeedbackWidget currentTab={activeTab} />
     </div>
   );
 }
