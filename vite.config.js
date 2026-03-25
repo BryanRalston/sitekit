@@ -3,15 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3200',
-        changeOrigin: true,
-      },
-    },
-  },
+  base: '/sitekit/',  // For GitHub Pages deployment at bryanralston.github.io/sitekit/
   build: {
     outDir: 'dist',
   },
