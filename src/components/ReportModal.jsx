@@ -353,11 +353,21 @@ export default function ReportModal({ job, groupBy, onClose }) {
             {missing.map(item => (
               <div key={item.id} style={{
                 padding: "8px 12px", background: C.yellowDim,
-                border: `1px solid ${C.yellowBorder}`, borderRadius: 6, marginBottom: 6
+                border: `1px solid ${C.yellowBorder}`, borderRadius: 6, marginBottom: 6,
+                opacity: item.missingPartsResolved ? 0.6 : 1,
               }}>
-                <div style={{ display: "flex", gap: 9, marginBottom: 3 }}>
+                <div style={{ display: "flex", gap: 9, marginBottom: 3, alignItems: "center" }}>
                   <span style={{ ...MF, color: C.accent, fontSize: 10 }}>{item.itemNumber}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{item.description}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text, textDecoration: item.missingPartsResolved ? "line-through" : "none" }}>{item.description}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+                    ...(item.missingPartsResolved
+                      ? { background: C.greenDim, color: C.green, border: `1px solid ${C.greenBorder}` }
+                      : item.missingPartsReported
+                        ? { background: C.yellowDim, color: C.yellow, border: `1px solid ${C.yellowBorder}` }
+                        : { background: C.redDim, color: C.red, border: `1px solid ${C.redBorder}` })
+                  }}>
+                    {item.missingPartsResolved ? "Resolved" : item.missingPartsReported ? `Reported ${new Date(item.missingPartsReported).toLocaleDateString()}` : "NOT REPORTED"}
+                  </span>
                 </div>
                 <div style={{ fontSize: 12, color: C.muted }}>{item.missingParts}</div>
               </div>
@@ -374,11 +384,21 @@ export default function ReportModal({ job, groupBy, onClose }) {
             {additional.map(item => (
               <div key={item.id} style={{
                 padding: "8px 12px", background: C.blueDim,
-                border: `1px solid ${C.blueBorder}`, borderRadius: 6, marginBottom: 6
+                border: `1px solid ${C.blueBorder}`, borderRadius: 6, marginBottom: 6,
+                opacity: item.additionalOrdersResolved ? 0.6 : 1,
               }}>
-                <div style={{ display: "flex", gap: 9, marginBottom: 3 }}>
+                <div style={{ display: "flex", gap: 9, marginBottom: 3, alignItems: "center" }}>
                   <span style={{ ...MF, color: C.accent, fontSize: 10 }}>{item.itemNumber}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{item.description}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text, textDecoration: item.additionalOrdersResolved ? "line-through" : "none" }}>{item.description}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+                    ...(item.additionalOrdersResolved
+                      ? { background: C.greenDim, color: C.green, border: `1px solid ${C.greenBorder}` }
+                      : item.additionalOrdersReported
+                        ? { background: C.yellowDim, color: C.yellow, border: `1px solid ${C.yellowBorder}` }
+                        : { background: C.redDim, color: C.red, border: `1px solid ${C.redBorder}` })
+                  }}>
+                    {item.additionalOrdersResolved ? "Resolved" : item.additionalOrdersReported ? `Reported ${new Date(item.additionalOrdersReported).toLocaleDateString()}` : "NOT REPORTED"}
+                  </span>
                 </div>
                 <div style={{ fontSize: 12, color: C.muted }}>{item.additionalOrders}</div>
               </div>
@@ -395,11 +415,21 @@ export default function ReportModal({ job, groupBy, onClose }) {
             {damaged.map(item => (
               <div key={item.id} style={{
                 padding: "10px 12px", background: C.redDim,
-                border: `1px solid ${C.redBorder}`, borderRadius: 6, marginBottom: 6
+                border: `1px solid ${C.redBorder}`, borderRadius: 6, marginBottom: 6,
+                opacity: item.damageResolved ? 0.6 : 1,
               }}>
-                <div style={{ display: "flex", gap: 9, marginBottom: 4 }}>
+                <div style={{ display: "flex", gap: 9, marginBottom: 4, alignItems: "center" }}>
                   <span style={{ ...MF, color: C.accent, fontSize: 10 }}>{item.itemNumber}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{item.description}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text, textDecoration: item.damageResolved ? "line-through" : "none" }}>{item.description}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+                    ...(item.damageResolved
+                      ? { background: C.greenDim, color: C.green, border: `1px solid ${C.greenBorder}` }
+                      : item.damageReported
+                        ? { background: C.yellowDim, color: C.yellow, border: `1px solid ${C.yellowBorder}` }
+                        : { background: C.redDim, color: C.red, border: `1px solid ${C.redBorder}` })
+                  }}>
+                    {item.damageResolved ? "Resolved" : item.damageReported ? `Reported ${new Date(item.damageReported).toLocaleDateString()}` : "NOT REPORTED"}
+                  </span>
                 </div>
                 {item.damageNotes && <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{item.damageNotes}</div>}
                 {item.photo_id && (

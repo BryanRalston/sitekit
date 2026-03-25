@@ -26,6 +26,7 @@ export default function FixturesTab({ job, onRefresh }) {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(true);
   const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week"
+  const [issuesFilter, setIssuesFilter] = useState(false); // show only unreported issues
   const isMobile = useMobile();
 
   const items = job.items || [];
@@ -45,6 +46,70 @@ export default function FixturesTab({ job, onRefresh }) {
     }
     return { overdue, arrivingToday, thisWeek, hasAnyDates };
   }, [items]);
+
+  // Unreported issues computation
+  const unreportedIssues = useMemo(() => {
+    return items.filter(i => {
+      const hasMissing = i.missingParts && !i.missingPartsReported;
+      const hasOrder = i.additionalOrders && !i.additionalOrdersReported;
+      const hasDamage = i.damaged && !i.damageReported;
+      return hasMissing || hasOrder || hasDamage;
+    });
+  }, [items]);
+
+  // Share all unreported issues
+  const handleShareAllIssues = async () => {
+    if (unreportedIssues.length === 0) return;
+    const header = `SiteKit Issue Report — ${job.name}\nStore: ${job.store} #${job.storeNumber} | Date: ${new Date().toLocaleDateString()}\n`;
+    let body = header;
+
+    const missingItems = unreportedIssues.filter(i => i.missingParts && !i.missingPartsReported);
+    const damagedItems = unreportedIssues.filter(i => i.damaged && !i.damageReported);
+    const orderItems = unreportedIssues.filter(i => i.additionalOrders && !i.additionalOrdersReported);
+
+    if (missingItems.length > 0) {
+      body += `\nMISSING PARTS (${missingItems.length} item${missingItems.length > 1 ? 's' : ''}):\n`;
+      for (const i of missingItems) body += `• ${i.itemNumber} — ${i.description} — ${i.missingParts}\n`;
+    }
+    if (damagedItems.length > 0) {
+      body += `\nDAMAGED (${damagedItems.length} item${damagedItems.length > 1 ? 's' : ''}):\n`;
+      for (const i of damagedItems) body += `• ${i.itemNumber} — ${i.description} — ${i.damageNotes || 'see photo'}\n`;
+    }
+    if (orderItems.length > 0) {
+      body += `\nADDITIONAL ORDERS NEEDED (${orderItems.length} item${orderItems.length > 1 ? 's' : ''}):\n`;
+      for (const i of orderItems) body += `• ${i.itemNumber} — ${i.description} — ${i.additionalOrders}\n`;
+    }
+
+    let shared = false;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `SiteKit Issues — ${job.name}`, text: body });
+        shared = true;
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          try { await navigator.clipboard.writeText(body); shared = true; } catch {}
+        }
+      }
+    } else {
+      try { await navigator.clipboard.writeText(body); shared = true; } catch {}
+    }
+
+    if (shared) {
+      // Mark all included items as reported
+      const now = new Date().toISOString();
+      for (const i of unreportedIssues) {
+        const updates = {};
+        if (i.missingParts && !i.missingPartsReported) updates.missingPartsReported = now;
+        if (i.damaged && !i.damageReported) updates.damageReported = now;
+        if (i.additionalOrders && !i.additionalOrdersReported) updates.additionalOrdersReported = now;
+        if (Object.keys(updates).length > 0) {
+          try { await api.updateItem(i.id, { ...i, ...updates }); } catch {}
+        }
+      }
+      onRefresh();
+      toast.success(`All ${unreportedIssues.length} issues shared and marked reported`);
+    }
+  };
 
   const saveItem = async (itemData) => {
     try {
@@ -157,7 +222,16 @@ export default function FixturesTab({ job, onRefresh }) {
       else if (deliveryFilter === "week") df = item.delDate && item.delDate > today && item.delDate <= weekAhead;
     }
 
-    return m && st && df;
+    // Unreported issues filter
+    let uf = true;
+    if (issuesFilter) {
+      const hasMissing = item.missingParts && !item.missingPartsReported;
+      const hasOrder = item.additionalOrders && !item.additionalOrdersReported;
+      const hasDamage = item.damaged && !item.damageReported;
+      uf = hasMissing || hasOrder || hasDamage;
+    }
+
+    return m && st && df && uf;
   });
 
   // Group items
@@ -216,6 +290,29 @@ export default function FixturesTab({ job, onRefresh }) {
             <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Import</Btn>
             <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Add Item</Btn>
           </div>
+
+          {/* Issues summary bar (mobile) */}
+          {unreportedIssues.length > 0 && (
+            <div style={{ padding: "4px 14px 10px", display: "flex", gap: 8, alignItems: "center" }}>
+              <button onClick={() => setIssuesFilter(v => !v)} style={{
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit", minHeight: 36,
+                background: issuesFilter ? C.redDim : "transparent",
+                color: C.red, border: `1px solid ${issuesFilter ? C.redBorder : C.border}`,
+              }}>
+                <span data-tutorial="issues-badge" style={{ fontSize: 13 }}>🔴</span> {unreportedIssues.length} unreported issue{unreportedIssues.length !== 1 ? 's' : ''}
+              </button>
+              <button onClick={handleShareAllIssues} style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                padding: "6px 12px", borderRadius: 6, fontSize: 12, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit", minHeight: 36,
+                background: C.redDim, color: C.red, border: `1px solid ${C.redBorder}`,
+              }}>
+                📤 Share All
+              </button>
+            </div>
+          )}
 
           {/* Mobile filter dropdown panel */}
           {showMobileFilters && (
@@ -340,6 +437,27 @@ export default function FixturesTab({ job, onRefresh }) {
           <Toggle checked={bulkMode} onChange={v => { setBulkMode(v); setSelectedIds(new Set()); }} label="Bulk" data-testid="bulk-toggle" />
           <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" data-testid="import-btn">Import</Btn>
           <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} data-tutorial="report" data-testid="report-btn">Report</Btn>
+          {unreportedIssues.length > 0 && (
+            <>
+              <button onClick={() => setIssuesFilter(v => !v)} style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "4px 10px",
+                borderRadius: 20, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit", minHeight: 30,
+                background: issuesFilter ? C.redDim : "transparent",
+                color: C.red, border: `1px solid ${issuesFilter ? C.redBorder : C.border}`,
+              }}>
+                🔴 {unreportedIssues.length} unreported
+              </button>
+              <button onClick={handleShareAllIssues} style={{
+                display: "flex", alignItems: "center", gap: 4, padding: "4px 10px",
+                borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit", minHeight: 30,
+                background: C.redDim, color: C.red, border: `1px solid ${C.redBorder}`,
+              }}>
+                📤 Share All
+              </button>
+            </>
+          )}
           <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})} data-testid="add-item-btn">Add Item</Btn>
         </div>
       )}
@@ -629,6 +747,7 @@ export default function FixturesTab({ job, onRefresh }) {
         <ItemModal
           item={editItem?.id ? editItem : null}
           jobId={job.id}
+          job={job}
           onSave={saveItem}
           onClose={() => setEditItem(null)}
           onDelete={editItem?.id ? () => deleteItem(editItem.id) : undefined}

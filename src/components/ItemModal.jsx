@@ -17,13 +17,102 @@ function validateItem(f, isEditing) {
   return errors;
 }
 
-export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
+async function shareIssue(job, item, issueType) {
+  let subject = '';
+  let body = '';
+  const header = `SiteKit Issue Report — ${job.name}\nStore: ${job.store} #${job.storeNumber}\nDate: ${new Date().toLocaleDateString()}\n\n`;
+
+  if (issueType === 'missing') {
+    subject = `Missing Parts — ${item.itemNumber} — ${job.name}`;
+    body = header + `MISSING PARTS:\n• ${item.itemNumber} (${item.description})\n  ${item.missingParts}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
+  } else if (issueType === 'order') {
+    subject = `Additional Order Needed — ${item.itemNumber} — ${job.name}`;
+    body = header + `ADDITIONAL ORDER NEEDED:\n• ${item.itemNumber} (${item.description})\n  ${item.additionalOrders}\n  Section: ${item.section || 'N/A'}`;
+  } else if (issueType === 'damage') {
+    subject = `Damage Report — ${item.itemNumber} — ${job.name}`;
+    body = header + `DAMAGE REPORT:\n• ${item.itemNumber} (${item.description})\n  ${item.damageNotes}\n  Qty: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
+  }
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: subject, text: body });
+      return true;
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        try { await navigator.clipboard.writeText(body); } catch {}
+        return true;
+      }
+      return false;
+    }
+  } else {
+    try { await navigator.clipboard.writeText(body); } catch {}
+    return true;
+  }
+}
+
+function IssueTracker({ issueType, hasContent, reportedDate, resolvedDate, onMarkReported, onMarkResolved, onReopen, onShare }) {
+  if (!hasContent) return null;
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+
+  if (resolvedDate) {
+    return (
+      <div style={{ padding: '8px 12px', background: C.greenDim, borderRadius: 6, border: `1px solid ${C.greenBorder}`, marginTop: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>Status: Resolved {fmtDate(resolvedDate)}</span>
+          <button onClick={onReopen} style={{
+            background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6,
+            color: C.muted, fontSize: 11, padding: '4px 10px', cursor: 'pointer',
+            fontFamily: 'inherit', minHeight: 32, minWidth: 44
+          }}>Reopen</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (reportedDate) {
+    return (
+      <div style={{ padding: '8px 12px', background: C.yellowDim, borderRadius: 6, border: `1px solid ${C.yellowBorder}`, marginTop: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: C.yellow, fontWeight: 600 }}>Status: Reported {fmtDate(reportedDate)}</span>
+          <button onClick={onMarkResolved} style={{
+            background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 6,
+            color: C.green, fontSize: 11, padding: '4px 10px', cursor: 'pointer',
+            fontFamily: 'inherit', fontWeight: 600, minHeight: 32, minWidth: 44
+          }}>Mark Resolved</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '8px 12px', background: C.redDim, borderRadius: 6, border: `1px solid ${C.redBorder}`, marginTop: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: C.red, fontWeight: 600 }}>Status: Not Reported</span>
+        <button onClick={onShare} style={{
+          background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 6,
+          color: C.text, fontSize: 11, padding: '4px 10px', cursor: 'pointer',
+          fontFamily: 'inherit', minHeight: 32, minWidth: 44
+        }}>Share</button>
+        <button onClick={onMarkReported} style={{
+          background: C.yellowDim, border: `1px solid ${C.yellowBorder}`, borderRadius: 6,
+          color: C.yellow, fontSize: 11, padding: '4px 10px', cursor: 'pointer',
+          fontFamily: 'inherit', fontWeight: 600, minHeight: 32, minWidth: 44
+        }}>Mark Reported</button>
+      </div>
+    </div>
+  );
+}
+
+export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete }) {
   const isEditing = !!item;
   const { toast } = useToast();
   const [f, setF] = useState(item || {
     vendor: "", materialClass: "", description: "", itemNumber: "", fixtureBook: "", section: "",
     qtyOrdered: "", delDate: "", showQtyOrdered: true, qtyReceived: "", dateReceived: "",
-    missingParts: "", additionalOrders: "", damaged: false, damageNotes: "", notes: "", hasPhoto: false
+    missingParts: "", additionalOrders: "", damaged: false, damageNotes: "", notes: "", hasPhoto: false,
+    missingPartsReported: "", missingPartsResolved: "",
+    additionalOrdersReported: "", additionalOrdersResolved: "",
+    damageReported: "", damageResolved: ""
   });
   const [photoPreview, setPhotoPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -128,7 +217,37 @@ export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <Inp label="Missing Parts" value={f.missingParts} onChange={s("missingParts")} placeholder="Describe missing parts..." multiline rows={2} />
+            <IssueTracker
+              issueType="missing"
+              hasContent={!!f.missingParts}
+              reportedDate={f.missingPartsReported}
+              resolvedDate={f.missingPartsResolved}
+              onMarkReported={() => { s("missingPartsReported")(new Date().toISOString()); }}
+              onMarkResolved={() => { s("missingPartsResolved")(new Date().toISOString()); }}
+              onReopen={() => { s("missingPartsResolved")(""); }}
+              onShare={async () => {
+                if (job) {
+                  const ok = await shareIssue(job, f, 'missing');
+                  if (ok) { s("missingPartsReported")(new Date().toISOString()); toast.success("Missing parts issue shared"); }
+                } else { toast.error("Job context not available"); }
+              }}
+            />
             <Inp label="Additional Items to Order" value={f.additionalOrders} onChange={s("additionalOrders")} placeholder="Additional items needed..." multiline rows={2} />
+            <IssueTracker
+              issueType="order"
+              hasContent={!!f.additionalOrders}
+              reportedDate={f.additionalOrdersReported}
+              resolvedDate={f.additionalOrdersResolved}
+              onMarkReported={() => { s("additionalOrdersReported")(new Date().toISOString()); }}
+              onMarkResolved={() => { s("additionalOrdersResolved")(new Date().toISOString()); }}
+              onReopen={() => { s("additionalOrdersResolved")(""); }}
+              onShare={async () => {
+                if (job) {
+                  const ok = await shareIssue(job, f, 'order');
+                  if (ok) { s("additionalOrdersReported")(new Date().toISOString()); toast.success("Additional order issue shared"); }
+                } else { toast.error("Job context not available"); }
+              }}
+            />
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: "0.09em", textTransform: "uppercase" }}>Damaged</label>
@@ -161,6 +280,21 @@ export default function ItemModal({ item, jobId, onSave, onClose, onDelete }) {
                       {displayPhoto ? "Replace" : "Add Photo"}
                     </Btn>
                   </div>
+                  <IssueTracker
+                    issueType="damage"
+                    hasContent={f.damaged}
+                    reportedDate={f.damageReported}
+                    resolvedDate={f.damageResolved}
+                    onMarkReported={() => { s("damageReported")(new Date().toISOString()); }}
+                    onMarkResolved={() => { s("damageResolved")(new Date().toISOString()); }}
+                    onReopen={() => { s("damageResolved")(""); }}
+                    onShare={async () => {
+                      if (job) {
+                        const ok = await shareIssue(job, f, 'damage');
+                        if (ok) { s("damageReported")(new Date().toISOString()); toast.success("Damage report shared"); }
+                      } else { toast.error("Job context not available"); }
+                    }}
+                  />
                 </div>
               )}
             </div>

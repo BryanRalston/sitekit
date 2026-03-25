@@ -3,6 +3,13 @@ import { C, MF, getItemStatus } from '../tokens';
 import { Badge } from './ui';
 import { useMobile } from '../hooks/useApi';
 
+function issueIcon(hasIssue, reportedDate, resolvedDate, unreportedEmoji, title) {
+  if (!hasIssue) return null;
+  if (resolvedDate) return <span title={`${title} — Resolved`} style={{ fontSize: 11 }}>✅</span>;
+  if (reportedDate) return <span title={`${title} — Reported`} style={{ fontSize: 11 }}>🟡</span>;
+  return <span title={`${title} — Unreported`} style={{ fontSize: 11 }}>{unreportedEmoji}</span>;
+}
+
 export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, groupBy, bulkMode, isSelected, onToggleSelect }) {
   const status = getItemStatus(item);
   const today = new Date().toISOString().slice(0, 10);
@@ -48,9 +55,9 @@ export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, grou
           <span>Rec: {item.qtyReceived || "---"}</span>
           {item.delDate && <span>{isToday ? <span style={{color: C.blue, fontWeight: 700}}>TODAY</span> : item.delDate}</span>}
           <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
-            {item.damaged && <span>🔴</span>}
-            {item.missingParts && <span>⚠️</span>}
-            {item.additionalOrders && <span>📦</span>}
+            {issueIcon(item.damaged, item.damageReported, item.damageResolved, '🔴', 'Damaged')}
+            {issueIcon(item.missingParts, item.missingPartsReported, item.missingPartsResolved, '⚠️', 'Missing Parts')}
+            {issueIcon(item.additionalOrders, item.additionalOrdersReported, item.additionalOrdersResolved, '📦', 'Additional Orders')}
             {item.hasPhoto && <span>📷</span>}
           </div>
         </div>
@@ -151,9 +158,9 @@ export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, grou
 
       {/* Flags */}
       <span style={{ display: "flex", gap: 3 }}>
-        {item.damaged && <span style={{ fontSize: 11 }}>🔴</span>}
-        {item.missingParts && <span style={{ fontSize: 11 }}>⚠️</span>}
-        {item.additionalOrders && <span style={{ fontSize: 11 }}>📦</span>}
+        {issueIcon(item.damaged, item.damageReported, item.damageResolved, '🔴', 'Damaged')}
+        {issueIcon(item.missingParts, item.missingPartsReported, item.missingPartsResolved, '⚠️', 'Missing Parts')}
+        {issueIcon(item.additionalOrders, item.additionalOrdersReported, item.additionalOrdersResolved, '📦', 'Additional Orders')}
         {item.hasPhoto && <span style={{ fontSize: 11 }}>📷</span>}
       </span>
 

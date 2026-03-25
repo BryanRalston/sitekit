@@ -46,6 +46,12 @@ const STEPS = [
     text: 'Filter by Pending, Partial, Received, Overdue, or Issue. The delivery dashboard shows what\'s arriving today.',
   },
   {
+    id: 'issues',
+    target: 'issues-badge',
+    title: 'Issue Communication',
+    text: 'Missing parts, damage, or need to reorder? Flag it, then Share to send a formatted report via text or email. SiteKit tracks what\'s been reported and what\'s resolved.',
+  },
+  {
     id: 'tab-visual',
     target: 'tab-visual',
     title: 'Photo Reference',
