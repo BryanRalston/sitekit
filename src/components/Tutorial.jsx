@@ -8,86 +8,102 @@ const STEPS = [
     id: 'welcome',
     target: null,
     title: 'Welcome to SiteKit!',
-    text: "Let's walk through how to manage your jobsite. This quick tour covers everything you need to know — from creating jobs to generating reports.",
+    text: "Your jobsite command center. This quick tour shows you everything — from importing fixtures to tracking crew hours. Let's go!",
     fullScreen: true,
   },
   {
     id: 'new-job',
     target: 'new-job',
     title: 'Create a Job',
-    text: 'Start by creating a job for your store remodel. Enter the store name, number, and location. Each job tracks its own fixtures, photos, and receipts.',
+    text: 'Every remodel starts here. Tap to create a job with the store name, number, and location.',
+    interactive: true,
+    triggerClick: true,
   },
   {
     id: 'import',
     target: 'import',
     title: 'Import Fixtures',
-    text: 'Upload your Assembly Detail PDF. SiteKit automatically parses vendors, sections, quantities, and delivery dates — no manual entry needed.',
+    text: 'Upload your Assembly Detail PDF. SiteKit parses vendors, sections, quantities, delivery dates — 500+ items in seconds.',
+    interactive: true,
+    triggerClick: true,
   },
   {
     id: 'fixture-list',
     target: 'fixture-list',
     title: 'Browse Fixtures',
-    text: 'Your fixtures are organized by vendor or section. Search, filter by status, and see delivery dates at a glance.',
+    text: 'Your fixtures organized by vendor or section. Full descriptions, quantities, and delivery dates visible on mobile.',
   },
   {
     id: 'item-row',
     target: 'item-row',
     title: 'Quick Receive',
-    text: 'Tap any fixture to update received quantities, flag missing parts, or document damage with photos.',
+    text: 'Tap any fixture to mark it received, flag missing parts, or document damage with annotated photos.',
   },
   {
     id: 'status-filters',
     target: 'status-filters',
     title: 'Status Tracking',
-    text: 'Filter by Pending, Partial, Received, or Issue to focus on what needs attention right now.',
+    text: 'Filter by Pending, Partial, Received, Overdue, or Issue. The delivery dashboard shows what\'s arriving today.',
   },
   {
     id: 'tab-visual',
     target: 'tab-visual',
-    title: 'Visual Reference',
-    text: 'Document installations by department. Photos you mark as Reference become a visual playbook for future jobs.',
+    title: 'Photo Reference',
+    text: 'Document installations by department. Mark photos as Reference to build a visual playbook across jobs.',
+    interactive: true,
+    triggerClick: true,
   },
   {
     id: 'tab-receipts',
     target: 'tab-receipts',
     title: 'Receipts',
-    text: 'Track purchase receipts by category. Snap photos of receipts and toggle submitted status for reimbursement.',
+    text: 'Track purchases by category. Snap receipt photos and use OCR to auto-fill store, amount, and date.',
+    interactive: true,
+    triggerClick: true,
+  },
+  {
+    id: 'tab-crew',
+    target: 'tab-crew',
+    title: 'Crew Hours',
+    text: 'Track your crew\'s daily hours per job. Clock in/out, edit the weekly grid, and review summaries with shortage alerts.',
+    interactive: true,
+    triggerClick: true,
   },
   {
     id: 'report',
     target: 'report',
     title: 'Reports & Export',
-    text: 'Generate receiving reports grouped by vendor or section. Download as PDF, CSV, or print directly for your project manager.',
+    text: 'Download PDF or CSV reports grouped by vendor or section. Print directly or share with your project manager.',
   },
   {
     id: 'global-search',
     target: 'global-search',
     title: 'Global Search',
-    text: 'Search across all fixtures, departments, and receipts at once. Tap the 🔍 icon or press Ctrl+K to find anything instantly.',
+    text: 'Search everything at once — fixtures, departments, receipts. Tap \uD83D\uDD0D or press Ctrl+K.',
   },
   {
     id: 'backup',
     target: 'backup',
     title: 'Backup Your Data',
-    text: 'Your data lives on this device. Tap Backup to download a JSON file with everything. Do this regularly — SiteKit will remind you after 7 days.',
+    text: 'All data lives on this device. Download a backup regularly — SiteKit reminds you after 7 days.',
   },
   {
     id: 'feedback',
     target: 'feedback-btn',
     title: 'Send Feedback',
-    text: 'See something that could be better? Tap the 💬 button anytime to report bugs, suggest features, or share your thoughts.',
+    text: 'See something that could be better? The \uD83D\uDCAC button is always there. Bug reports, feature ideas, anything.',
   },
   {
     id: 'lock',
     target: 'lock',
     title: 'PIN Lock',
-    text: 'Lock the app when you\'re done. Your 4-digit PIN protects your data from prying eyes on a shared device.',
+    text: 'Lock the app when you\'re done. Your PIN is hashed with PBKDF2 — secure even on a shared device.',
   },
   {
     id: 'done',
     target: null,
-    title: "You're ready to go!",
-    text: 'SiteKit gets smarter with every job — your photo references and fixture knowledge carry forward. Pro tips: annotate damage photos with ✏️, and scan receipt photos with OCR to auto-fill fields.',
+    title: "You're all set!",
+    text: 'SiteKit grows with you — photo references and fixture knowledge carry forward to every future job. Go build something.',
     fullScreen: true,
     isFinal: true,
   },
@@ -134,8 +150,12 @@ export default function Tutorial({ onClose }) {
   const [targetRect, setTargetRect] = useState(null);
   const [tooltipSize, setTooltipSize] = useState({ w: 320, h: 200 });
   const [fadeIn, setFadeIn] = useState(false);
+  const [animKey, setAnimKey] = useState(0); // drives re-mount animation on step change
   const tooltipRef = useRef(null);
   const current = STEPS[step];
+
+  // Check if target element exists for interactive steps
+  const [targetExists, setTargetExists] = useState(false);
 
   // Measure tooltip after render
   useEffect(() => {
@@ -149,16 +169,19 @@ export default function Tutorial({ onClose }) {
   const measureTarget = useCallback(() => {
     if (!current.target) {
       setTargetRect(null);
+      setTargetExists(false);
       return;
     }
     const el = document.querySelector(`[data-tutorial="${current.target}"]`);
     if (el) {
       const r = el.getBoundingClientRect();
       setTargetRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      setTargetExists(true);
       // Scroll into view if needed
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else {
       setTargetRect(null);
+      setTargetExists(false);
     }
   }, [current.target]);
 
@@ -184,6 +207,11 @@ export default function Tutorial({ onClose }) {
     requestAnimationFrame(() => setFadeIn(true));
   }, []);
 
+  // Bump animKey on step change for entrance animation
+  useEffect(() => {
+    setAnimKey(k => k + 1);
+  }, [step]);
+
   const goNext = () => {
     if (step < STEPS.length - 1) {
       setStep(step + 1);
@@ -205,6 +233,17 @@ export default function Tutorial({ onClose }) {
 
   const skip = () => finish();
 
+  // Handle "Try it" — click the target element, then advance after delay
+  const handleTryIt = () => {
+    const el = document.querySelector(`[data-tutorial="${current.target}"]`);
+    if (el) {
+      el.click();
+      setTimeout(goNext, 500);
+    } else {
+      goNext();
+    }
+  };
+
   // Spotlight cutout via box-shadow
   const spotPad = 8;
   const spotRadius = 10;
@@ -219,6 +258,9 @@ export default function Tutorial({ onClose }) {
     arrowDir = pos.arrow;
   }
 
+  // Determine button mode for this step
+  const isInteractive = current.interactive && current.triggerClick && targetExists;
+
   // ─── Full-screen steps (welcome + done) ─────────────────────────────────
   if (current.fullScreen) {
     return (
@@ -230,14 +272,14 @@ export default function Tutorial({ onClose }) {
         opacity: fadeIn ? 1 : 0,
         transition: 'opacity 0.3s ease',
       }} onClick={skip}>
-        <div onClick={e => e.stopPropagation()} style={{
+        <div key={animKey} onClick={e => e.stopPropagation()} style={{
           background: C.card,
           border: `1px solid ${C.accentBorder}`,
           borderRadius: 16,
           padding: '36px 32px 28px',
           maxWidth: 380, width: '90vw',
           textAlign: 'center',
-          animation: 'tutorialSlideIn 0.35s ease',
+          animation: 'tutorialFadeSlide 0.35s ease',
         }}>
           {/* Logo */}
           <div style={{ ...TF, fontSize: 32, fontWeight: 700, color: C.accent, marginBottom: 4 }}>
@@ -254,6 +296,11 @@ export default function Tutorial({ onClose }) {
 
           <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7, marginBottom: 24 }}>
             {current.text}
+          </div>
+
+          {/* Step counter text */}
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.06em', marginBottom: 8, textTransform: 'uppercase' }}>
+            Step {step + 1} of {STEPS.length}
           </div>
 
           {/* Progress dots */}
@@ -279,6 +326,14 @@ export default function Tutorial({ onClose }) {
             </button>
           )}
         </div>
+
+        {/* Inject keyframe animations */}
+        <style>{`
+          @keyframes tutorialFadeSlide {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
       </div>
     );
   }
@@ -334,6 +389,7 @@ export default function Tutorial({ onClose }) {
 
       {/* Tooltip card */}
       <div
+        key={animKey}
         ref={tooltipRef}
         onClick={e => e.stopPropagation()}
         style={{
@@ -346,7 +402,7 @@ export default function Tutorial({ onClose }) {
           padding: '18px 20px 16px',
           zIndex: 10003,
           boxShadow: `0 8px 32px rgba(0,0,0,0.5)`,
-          animation: 'tutorialSlideIn 0.3s ease',
+          animation: 'tutorialFadeSlide 0.3s ease',
         }}
       >
         {/* Arrow */}
@@ -385,8 +441,8 @@ export default function Tutorial({ onClose }) {
           }} />
         )}
 
-        {/* Step counter */}
-        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.06em', marginBottom: 6 }}>
+        {/* Step counter text */}
+        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.06em', marginBottom: 6, textTransform: 'uppercase' }}>
           Step {step + 1} of {STEPS.length}
         </div>
 
@@ -404,28 +460,40 @@ export default function Tutorial({ onClose }) {
         <ProgressDots total={STEPS.length} current={step} />
 
         {/* Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           {step > 0 && (
             <button onClick={goBack} style={ghostBtnStyle}>
               &#8592; Back
             </button>
           )}
-          <button onClick={goNext} style={primaryBtnStyle}>
-            {step === STEPS.length - 1 ? 'Finish' : 'Next \u2192'}
-          </button>
-          <button onClick={skip} style={{
+
+          {isInteractive ? (
+            /* Interactive step: "Try it" as primary action */
+            <button onClick={handleTryIt} style={tryItBtnStyle}>
+              Try it &#8594;
+            </button>
+          ) : (
+            /* Normal step: standard Next button */
+            <button onClick={goNext} style={primaryBtnStyle}>
+              {step === STEPS.length - 1 ? 'Finish' : 'Next \u2192'}
+            </button>
+          )}
+
+          {/* Skip link — also serves as "Skip" for interactive steps */}
+          <button onClick={isInteractive ? goNext : skip} style={{
             background: 'none', border: 'none', color: C.muted, fontSize: 11,
             cursor: 'pointer', marginLeft: 'auto', padding: '4px 8px', fontFamily: 'inherit',
+            minHeight: 44, display: 'inline-flex', alignItems: 'center',
           }}>
-            Skip
+            {isInteractive ? 'Skip' : 'Skip tour'}
           </button>
         </div>
       </div>
 
-      {/* Inject keyframe animation */}
+      {/* Inject keyframe animations */}
       <style>{`
-        @keyframes tutorialSlideIn {
-          from { opacity: 0; transform: translateY(8px); }
+        @keyframes tutorialFadeSlide {
+          from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
@@ -456,6 +524,14 @@ const primaryBtnStyle = {
   borderRadius: 6, padding: '10px 20px', fontSize: 13, fontWeight: 700,
   cursor: 'pointer', fontFamily: 'inherit', minHeight: 44,
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+};
+
+const tryItBtnStyle = {
+  background: C.accent, color: '#1a1a1a', border: 'none',
+  borderRadius: 8, padding: '12px 24px', fontSize: 15, fontWeight: 700,
+  cursor: 'pointer', fontFamily: 'inherit', minHeight: 44,
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  gap: 6, letterSpacing: '0.01em',
 };
 
 const ghostBtnStyle = {
