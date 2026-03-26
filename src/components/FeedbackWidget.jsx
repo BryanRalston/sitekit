@@ -100,10 +100,20 @@ export default function FeedbackWidget({ currentTab }) {
     }
   };
 
+  // Hide the floating button when any modal is open (prevents overlap on mobile)
+  const [modalOpen, setModalOpen] = useState(false);
+  React.useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setModalOpen(!!document.querySelector('[data-testid="modal-close"]'));
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
-      {/* Floating button */}
-      <button
+      {/* Floating button — hidden when a modal is open */}
+      {!modalOpen && !open && <button
         data-tutorial="feedback-btn"
         onClick={() => setOpen(true)}
         aria-label="Submit feedback"
@@ -129,7 +139,7 @@ export default function FeedbackWidget({ currentTab }) {
         onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = 'rgba(249,115,22,0.85)'; }}
       >
         {'\uD83D\uDCAC'}
-      </button>
+      </button>}
 
       {/* Feedback modal */}
       {open && (
