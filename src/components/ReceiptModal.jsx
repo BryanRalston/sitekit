@@ -225,7 +225,6 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handlePhotoCapture}
             style={{ display: 'none' }}
           />
