@@ -123,7 +123,7 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
           }}>
             📷 {hasImage ? "Replace" : "Add"}
           </button>
-          <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }}
+          <input type="file" accept="image/*" capture="environment" ref={fileRef} style={{ display: "none" }}
             onChange={handlePhoto} />
         </div>
 

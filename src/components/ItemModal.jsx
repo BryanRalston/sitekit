@@ -281,7 +281,7 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
                           }}>✕</button>
                       </div>
                     )}
-                    <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }} onChange={handlePhoto} />
+                    <input type="file" accept="image/*" capture="environment" ref={fileRef} style={{ display: "none" }} onChange={handlePhoto} />
                     <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current.click()}>
                       {displayPhoto ? "Replace" : "Add Photo"}
                     </Btn>

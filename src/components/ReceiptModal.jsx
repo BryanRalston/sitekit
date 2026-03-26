@@ -225,12 +225,13 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
             ref={fileRef}
             type="file"
             accept="image/*"
+            capture="environment"
             onChange={handlePhotoCapture}
             style={{ display: 'none' }}
           />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current?.click()}>
-              {photoPreview ? 'Replace Photo' : 'Capture Photo'}
+              {photoPreview ? 'Replace Photo' : 'Take Photo'}
             </Btn>
             {photoPreview && !ocrLoading && (
               <Btn variant="teal" size="sm" icon="🔍" onClick={handleOCR}>
