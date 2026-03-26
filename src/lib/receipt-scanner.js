@@ -13,7 +13,7 @@
 // iOS Notes-style color-preserving enhancement: luminance-based lighting
 // normalization, adaptive contrast stretch, paper-white push, sharpening.
 
-export async function enhanceImage(dataURL, maxWidth = 900) {
+export async function enhanceImage(dataURL, maxWidth = 800) {
   try {
     return await new Promise((resolve, reject) => {
       const img = new Image();
@@ -534,29 +534,36 @@ export function scoreConfidence(parsed) {
 // Runs the complete scan pipeline with stage callbacks for UI feedback.
 // onStage('enhancing' | 'scanning' | 'parsing' | 'done' | 'error')
 
+// Helper: wrap a promise with a timeout
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out (${ms / 1000}s)`)), ms)),
+  ]);
+}
+
 export async function scanReceipt(imageDataUrl, onStage) {
   try {
-    // Stage 1: Enhance
+    // Stage 1: Enhance (10s timeout)
     onStage?.('enhancing');
-    const enhanced = await enhanceImage(imageDataUrl);
-    const trimmed = await trimToContent(enhanced);
+    const enhanced = await withTimeout(enhanceImage(imageDataUrl), 10000, 'Image enhancement');
+    const trimmed = await withTimeout(trimToContent(enhanced), 5000, 'Image trim');
 
-    // Stage 2: OCR
+    // Stage 2: OCR (45s timeout including CDN load)
     onStage?.('scanning');
     if (!window.Tesseract) {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
       document.head.appendChild(script);
-      const loadPromise = new Promise((resolve, reject) => {
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
-      });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Tesseract.js loading timed out (30s)')), 30000)
+      await withTimeout(
+        new Promise((resolve, reject) => {
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+        }),
+        30000, 'Tesseract.js loading'
       );
-      await Promise.race([loadPromise, timeoutPromise]);
 
-      // Wait for Tesseract to fully initialize (up to 5 seconds)
+      // Wait for Tesseract to fully initialize
       let attempts = 0;
       while (!window.Tesseract?.createWorker && attempts < 50) {
         await new Promise(r => setTimeout(r, 100));
@@ -566,8 +573,9 @@ export async function scanReceipt(imageDataUrl, onStage) {
         throw new Error('Tesseract.js failed to initialize');
       }
     }
+
     const worker = await window.Tesseract.createWorker('eng');
-    const ocrResult = await worker.recognize(trimmed);
+    const ocrResult = await withTimeout(worker.recognize(trimmed), 45000, 'OCR recognition');
     await worker.terminate();
     const rawText = ocrResult.data.text;
 

@@ -45,6 +45,8 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
   const handlePhoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
     setUploading(true);
     try {
       const fd = new FormData();
@@ -122,7 +124,7 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
             📷 {hasImage ? "Replace" : "Add"}
           </button>
           <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }}
-            onChange={handlePhoto} capture="environment" />
+            onChange={handlePhoto} />
         </div>
 
         {/* Card body */}

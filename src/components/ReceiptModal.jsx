@@ -96,6 +96,8 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
     const reader = new FileReader();
     reader.onload = () => setPhotoPreview(reader.result);
     reader.readAsDataURL(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
   };
 
   const handleOCR = async () => {
@@ -223,7 +225,6 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
             onChange={handlePhotoCapture}
             style={{ display: 'none' }}
           />
