@@ -16,10 +16,7 @@ export default function ReceiptLogImport({ onClose, onImport }) {
     setParsed(null);
     setResults(null);
 
-    if (!file || !file.name.endsWith('.json')) {
-      setError('Please select a JSON file');
-      return;
-    }
+    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = () => {
