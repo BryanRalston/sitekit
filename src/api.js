@@ -305,17 +305,34 @@ export const api = {
 
   async uploadPhoto(formData) {
     const file = formData.get('photo');
+    const existingId = formData.get('photoId');
     const departmentId = formData.get('departmentId');
     const title = formData.get('title') || '';
     const notes = formData.get('notes') || '';
-    const photoType = formData.get('photoType') || 'department';
+    const photoType = formData.get('type') || 'department';
 
     const compressed = await compressImage(file);
-    const id = generateId();
+
+    // Use existing ID if provided, otherwise generate new
+    const id = existingId || generateId();
     await put('blobs', { id, data: compressed });
+
+    if (existingId) {
+      // Update existing photo record
+      const existing = await getOne('photos', existingId);
+      if (existing) {
+        const updated = { ...existing, hasPhoto: true };
+        if (title) updated.title = title;
+        if (notes) updated.notes = notes;
+        await put('photos', updated);
+        return updated;
+      }
+    }
+
+    // Create new photo record
     const photo = {
       id, departmentId: departmentId || null, title, notes, photoType,
-      completed: false, isReference: false, tags: [], linkedItemIds: [],
+      completed: false, isReference: false, hasPhoto: true, tags: [], linkedItemIds: [],
       createdAt: new Date().toISOString(),
     };
     await put('photos', photo);

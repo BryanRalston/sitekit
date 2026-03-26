@@ -13,156 +13,161 @@
 // iOS Notes-style color-preserving enhancement: luminance-based lighting
 // normalization, adaptive contrast stretch, paper-white push, sharpening.
 
-export function enhanceImage(dataURL, maxWidth = 1500) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onerror = () => reject(new Error('Image load failed'));
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let w = img.width, h = img.height;
-      if (w > maxWidth) { const s = maxWidth / w; w = maxWidth; h = Math.round(h * s); }
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
+export async function enhanceImage(dataURL, maxWidth = 900) {
+  try {
+    return await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Image load failed'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { const s = maxWidth / w; w = maxWidth; h = Math.round(h * s); }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
 
-      const imageData = ctx.getImageData(0, 0, w, h);
-      const px = imageData.data;
-      const totalPx = w * h;
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const px = imageData.data;
+        const totalPx = w * h;
 
-      // Step 1: Compute luminance (all adjustments reference this, colors stay in RGB)
-      const lum = new Float32Array(totalPx);
-      for (let i = 0; i < totalPx; i++) {
-        lum[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
-      }
+        // Step 1: Compute luminance (all adjustments reference this, colors stay in RGB)
+        const lum = new Float32Array(totalPx);
+        for (let i = 0; i < totalPx; i++) {
+          lum[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+        }
 
-      // Step 2: Background luminance estimation via downsample -> blur -> upsample
-      // Captures ambient lighting pattern (shadows, uneven exposure)
-      const dsF = 16;
-      const dsW = Math.max(1, Math.round(w / dsF));
-      const dsH = Math.max(1, Math.round(h / dsF));
-      const ds = new Float32Array(dsW * dsH);
+        // Step 2: Background luminance estimation via downsample -> blur -> upsample
+        // Captures ambient lighting pattern (shadows, uneven exposure)
+        const dsF = 16;
+        const dsW = Math.max(1, Math.round(w / dsF));
+        const dsH = Math.max(1, Math.round(h / dsF));
+        const ds = new Float32Array(dsW * dsH);
 
-      for (let dy = 0; dy < dsH; dy++) {
-        for (let dx = 0; dx < dsW; dx++) {
-          let sum = 0, count = 0;
-          const sy0 = Math.round(dy * h / dsH), sy1 = Math.round((dy + 1) * h / dsH);
-          const sx0 = Math.round(dx * w / dsW), sx1 = Math.round((dx + 1) * w / dsW);
-          for (let sy = sy0; sy < sy1; sy++) {
-            for (let sx = sx0; sx < sx1; sx++) {
-              sum += lum[sy * w + sx]; count++;
+        for (let dy = 0; dy < dsH; dy++) {
+          for (let dx = 0; dx < dsW; dx++) {
+            let sum = 0, count = 0;
+            const sy0 = Math.round(dy * h / dsH), sy1 = Math.round((dy + 1) * h / dsH);
+            const sx0 = Math.round(dx * w / dsW), sx1 = Math.round((dx + 1) * w / dsW);
+            for (let sy = sy0; sy < sy1; sy++) {
+              for (let sx = sx0; sx < sx1; sx++) {
+                sum += lum[sy * w + sx]; count++;
+              }
             }
+            ds[dy * dsW + dx] = sum / (count || 1);
           }
-          ds[dy * dsW + dx] = sum / (count || 1);
         }
-      }
 
-      // 3-pass box blur on downsampled (approximates Gaussian)
-      boxBlur(ds, dsW, dsH, Math.max(2, Math.round(Math.min(dsW, dsH) / 4)));
+        // 3-pass box blur on downsampled (approximates Gaussian)
+        boxBlur(ds, dsW, dsH, Math.max(2, Math.round(Math.min(dsW, dsH) / 4)));
 
-      // Upsample background to full resolution (bilinear interpolation)
-      const bg = new Float32Array(totalPx);
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const fx = (x + 0.5) * dsW / w - 0.5;
-          const fy = (y + 0.5) * dsH / h - 0.5;
-          const x0 = Math.max(0, Math.floor(fx)), x1 = Math.min(dsW - 1, x0 + 1);
-          const y0 = Math.max(0, Math.floor(fy)), y1 = Math.min(dsH - 1, y0 + 1);
-          const bx = fx - x0, by = fy - y0;
-          bg[y * w + x] =
-            ds[y0 * dsW + x0] * (1 - bx) * (1 - by) +
-            ds[y0 * dsW + x1] * bx * (1 - by) +
-            ds[y1 * dsW + x0] * (1 - bx) * by +
-            ds[y1 * dsW + x1] * bx * by;
+        // Upsample background to full resolution (bilinear interpolation)
+        const bg = new Float32Array(totalPx);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const fx = (x + 0.5) * dsW / w - 0.5;
+            const fy = (y + 0.5) * dsH / h - 0.5;
+            const x0 = Math.max(0, Math.floor(fx)), x1 = Math.min(dsW - 1, x0 + 1);
+            const y0 = Math.max(0, Math.floor(fy)), y1 = Math.min(dsH - 1, y0 + 1);
+            const bx = fx - x0, by = fy - y0;
+            bg[y * w + x] =
+              ds[y0 * dsW + x0] * (1 - bx) * (1 - by) +
+              ds[y0 * dsW + x1] * bx * (1 - by) +
+              ds[y1 * dsW + x0] * (1 - bx) * by +
+              ds[y1 * dsW + x1] * bx * by;
+          }
         }
-      }
 
-      // Step 3: Color-preserving lighting normalization
-      // Divide each pixel's RGB by local background luminance, scale to target white
-      const targetL = 235;
-      for (let i = 0; i < totalPx; i++) {
-        const bgVal = Math.max(bg[i], 1);
-        const ratio = Math.min(targetL / bgVal, 3.5); // cap to prevent noise amplification
-        px[i * 4]     = Math.min(255, Math.round(px[i * 4] * ratio));
-        px[i * 4 + 1] = Math.min(255, Math.round(px[i * 4 + 1] * ratio));
-        px[i * 4 + 2] = Math.min(255, Math.round(px[i * 4 + 2] * ratio));
-      }
-
-      // Step 4: Adaptive contrast stretch (luminance-based, applied proportionally to RGB)
-      const lumN = new Float32Array(totalPx);
-      for (let i = 0; i < totalPx; i++) {
-        lumN[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
-      }
-
-      const hist = new Uint32Array(256);
-      for (let i = 0; i < totalPx; i++) hist[Math.min(255, Math.round(lumN[i]))]++;
-      let lo = 0, hi = 255, cum = 0;
-      for (let v = 0; v < 256; v++) { cum += hist[v]; if (cum >= totalPx * 0.005) { lo = v; break; } }
-      cum = 0;
-      for (let v = 255; v >= 0; v--) { cum += hist[v]; if (cum >= totalPx * 0.005) { hi = v; break; } }
-      if (hi <= lo) hi = lo + 1;
-      const rng = hi - lo;
-
-      for (let i = 0; i < totalPx; i++) {
-        const oldL = lumN[i];
-        if (oldL < 1) continue;
-        const newL = Math.max(0, Math.min(255, (oldL - lo) / rng * 255));
-        const scale = newL / oldL;
-        px[i * 4]     = Math.min(255, Math.round(px[i * 4] * scale));
-        px[i * 4 + 1] = Math.min(255, Math.round(px[i * 4 + 1] * scale));
-        px[i * 4 + 2] = Math.min(255, Math.round(px[i * 4 + 2] * scale));
-      }
-
-      // Step 5: Paper white push — near-white pixels blend toward pure white
-      for (let i = 0; i < totalPx; i++) {
-        const l = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
-        if (l > 215) {
-          const t = Math.min(1, (l - 215) / 40);
-          const blend = t * 0.6;
-          px[i * 4]     = Math.round(px[i * 4] + (255 - px[i * 4]) * blend);
-          px[i * 4 + 1] = Math.round(px[i * 4 + 1] + (255 - px[i * 4 + 1]) * blend);
-          px[i * 4 + 2] = Math.round(px[i * 4 + 2] + (255 - px[i * 4 + 2]) * blend);
+        // Step 3: Color-preserving lighting normalization
+        // Divide each pixel's RGB by local background luminance, scale to target white
+        const targetL = 235;
+        for (let i = 0; i < totalPx; i++) {
+          const bgVal = Math.max(bg[i], 1);
+          const ratio = Math.min(targetL / bgVal, 3.5); // cap to prevent noise amplification
+          px[i * 4]     = Math.min(255, Math.round(px[i * 4] * ratio));
+          px[i * 4 + 1] = Math.min(255, Math.round(px[i * 4 + 1] * ratio));
+          px[i * 4 + 2] = Math.min(255, Math.round(px[i * 4 + 2] * ratio));
         }
-      }
 
-      // Step 6: Luminance-space sharpening (preserves colors, crisps text)
-      const lumF = new Float32Array(totalPx);
-      for (let i = 0; i < totalPx; i++) {
-        lumF[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
-      }
+        // Step 4: Adaptive contrast stretch (luminance-based, applied proportionally to RGB)
+        const lumN = new Float32Array(totalPx);
+        for (let i = 0; i < totalPx; i++) {
+          lumN[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+        }
 
-      const sharp = new Float32Array(totalPx);
-      const kern = [0, -0.5, 0, -0.5, 3, -0.5, 0, -0.5, 0];
-      for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-          let s = 0;
-          for (let ky = -1; ky <= 1; ky++) {
-            for (let kx = -1; kx <= 1; kx++) {
-              s += lumF[(y + ky) * w + (x + kx)] * kern[(ky + 1) * 3 + (kx + 1)];
+        const hist = new Uint32Array(256);
+        for (let i = 0; i < totalPx; i++) hist[Math.min(255, Math.round(lumN[i]))]++;
+        let lo = 0, hi = 255, cum = 0;
+        for (let v = 0; v < 256; v++) { cum += hist[v]; if (cum >= totalPx * 0.005) { lo = v; break; } }
+        cum = 0;
+        for (let v = 255; v >= 0; v--) { cum += hist[v]; if (cum >= totalPx * 0.005) { hi = v; break; } }
+        if (hi <= lo) hi = lo + 1;
+        const rng = hi - lo;
+
+        for (let i = 0; i < totalPx; i++) {
+          const oldL = lumN[i];
+          if (oldL < 1) continue;
+          const newL = Math.max(0, Math.min(255, (oldL - lo) / rng * 255));
+          const scale = newL / oldL;
+          px[i * 4]     = Math.min(255, Math.round(px[i * 4] * scale));
+          px[i * 4 + 1] = Math.min(255, Math.round(px[i * 4 + 1] * scale));
+          px[i * 4 + 2] = Math.min(255, Math.round(px[i * 4 + 2] * scale));
+        }
+
+        // Step 5: Paper white push — near-white pixels blend toward pure white
+        for (let i = 0; i < totalPx; i++) {
+          const l = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+          if (l > 215) {
+            const t = Math.min(1, (l - 215) / 40);
+            const blend = t * 0.6;
+            px[i * 4]     = Math.round(px[i * 4] + (255 - px[i * 4]) * blend);
+            px[i * 4 + 1] = Math.round(px[i * 4 + 1] + (255 - px[i * 4 + 1]) * blend);
+            px[i * 4 + 2] = Math.round(px[i * 4 + 2] + (255 - px[i * 4 + 2]) * blend);
+          }
+        }
+
+        // Step 6: Luminance-space sharpening (preserves colors, crisps text)
+        const lumF = new Float32Array(totalPx);
+        for (let i = 0; i < totalPx; i++) {
+          lumF[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+        }
+
+        const sharp = new Float32Array(totalPx);
+        const kern = [0, -0.5, 0, -0.5, 3, -0.5, 0, -0.5, 0];
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            let s = 0;
+            for (let ky = -1; ky <= 1; ky++) {
+              for (let kx = -1; kx <= 1; kx++) {
+                s += lumF[(y + ky) * w + (x + kx)] * kern[(ky + 1) * 3 + (kx + 1)];
+              }
             }
+            sharp[y * w + x] = Math.max(0, Math.min(255, s));
           }
-          sharp[y * w + x] = Math.max(0, Math.min(255, s));
         }
-      }
-      // Copy edges
-      for (let x = 0; x < w; x++) { sharp[x] = lumF[x]; sharp[(h - 1) * w + x] = lumF[(h - 1) * w + x]; }
-      for (let y = 0; y < h; y++) { sharp[y * w] = lumF[y * w]; sharp[y * w + w - 1] = lumF[y * w + w - 1]; }
+        // Copy edges
+        for (let x = 0; x < w; x++) { sharp[x] = lumF[x]; sharp[(h - 1) * w + x] = lumF[(h - 1) * w + x]; }
+        for (let y = 0; y < h; y++) { sharp[y * w] = lumF[y * w]; sharp[y * w + w - 1] = lumF[y * w + w - 1]; }
 
-      // Transfer sharpening to RGB proportionally
-      for (let i = 0; i < totalPx; i++) {
-        const oldL = lumF[i];
-        if (oldL < 1) continue;
-        const scale = sharp[i] / oldL;
-        px[i * 4]     = Math.min(255, Math.max(0, Math.round(px[i * 4] * scale)));
-        px[i * 4 + 1] = Math.min(255, Math.max(0, Math.round(px[i * 4 + 1] * scale)));
-        px[i * 4 + 2] = Math.min(255, Math.max(0, Math.round(px[i * 4 + 2] * scale)));
-      }
+        // Transfer sharpening to RGB proportionally
+        for (let i = 0; i < totalPx; i++) {
+          const oldL = lumF[i];
+          if (oldL < 1) continue;
+          const scale = sharp[i] / oldL;
+          px[i * 4]     = Math.min(255, Math.max(0, Math.round(px[i * 4] * scale)));
+          px[i * 4 + 1] = Math.min(255, Math.max(0, Math.round(px[i * 4 + 1] * scale)));
+          px[i * 4 + 2] = Math.min(255, Math.max(0, Math.round(px[i * 4 + 2] * scale)));
+        }
 
-      ctx.putImageData(imageData, 0, 0);
-      resolve(canvas.toDataURL('image/jpeg', 0.92));
-    };
-    img.src = dataURL;
-  });
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.src = dataURL;
+    });
+  } catch (err) {
+    console.warn('Image enhancement failed, using original:', err.message);
+    return dataURL;
+  }
 }
 
 // ─── Box Blur Helper ─────────────────────────────────────────────────────────
@@ -197,78 +202,83 @@ function boxBlur(arr, bw, bh, radius) {
 // ─── Content-Aware Trim ──────────────────────────────────────────────────────
 // Removes uniform background rows/columns from edges of an enhanced receipt image.
 
-export function trimToContent(dataURL, padding = 10) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const px = imageData.data;
-      const w = canvas.width;
-      const h = canvas.height;
+export async function trimToContent(dataURL, padding = 10) {
+  try {
+    return await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const px = imageData.data;
+        const w = canvas.width;
+        const h = canvas.height;
 
-      function lum(x, y) {
-        const idx = (y * w + x) * 4;
-        return 0.299 * px[idx] + 0.587 * px[idx + 1] + 0.114 * px[idx + 2];
-      }
-
-      function isRowUniform(y) {
-        let minL = 255, maxL = 0;
-        for (let x = 0; x < w; x += 4) {
-          const l = lum(x, y);
-          if (l < minL) minL = l;
-          if (l > maxL) maxL = l;
+        function lum(x, y) {
+          const idx = (y * w + x) * 4;
+          return 0.299 * px[idx] + 0.587 * px[idx + 1] + 0.114 * px[idx + 2];
         }
-        return (maxL - minL) < 30;
-      }
 
-      function isColUniform(x) {
-        let minL = 255, maxL = 0;
-        for (let y = 0; y < h; y += 4) {
-          const l = lum(x, y);
-          if (l < minL) minL = l;
-          if (l > maxL) maxL = l;
+        function isRowUniform(y) {
+          let minL = 255, maxL = 0;
+          for (let x = 0; x < w; x += 4) {
+            const l = lum(x, y);
+            if (l < minL) minL = l;
+            if (l > maxL) maxL = l;
+          }
+          return (maxL - minL) < 30;
         }
-        return (maxL - minL) < 30;
-      }
 
-      let top = 0;
-      while (top < h && isRowUniform(top)) top++;
-      let bottom = h - 1;
-      while (bottom > top && isRowUniform(bottom)) bottom--;
-      let left = 0;
-      while (left < w && isColUniform(left)) left++;
-      let right = w - 1;
-      while (right > left && isColUniform(right)) right--;
+        function isColUniform(x) {
+          let minL = 255, maxL = 0;
+          for (let y = 0; y < h; y += 4) {
+            const l = lum(x, y);
+            if (l < minL) minL = l;
+            if (l > maxL) maxL = l;
+          }
+          return (maxL - minL) < 30;
+        }
 
-      // Safety: if trim would remove >50% in either dimension, skip
-      const contentW = right - left + 1;
-      const contentH = bottom - top + 1;
-      if (contentW < w * 0.5 || contentH < h * 0.5) {
-        resolve(dataURL);
-        return;
-      }
+        let top = 0;
+        while (top < h && isRowUniform(top)) top++;
+        let bottom = h - 1;
+        while (bottom > top && isRowUniform(bottom)) bottom--;
+        let left = 0;
+        while (left < w && isColUniform(left)) left++;
+        let right = w - 1;
+        while (right > left && isColUniform(right)) right--;
 
-      top = Math.max(0, top - padding);
-      bottom = Math.min(h - 1, bottom + padding);
-      left = Math.max(0, left - padding);
-      right = Math.min(w - 1, right + padding);
+        // Safety: if trim would remove >50% in either dimension, skip
+        const contentW = right - left + 1;
+        const contentH = bottom - top + 1;
+        if (contentW < w * 0.5 || contentH < h * 0.5) {
+          resolve(dataURL);
+          return;
+        }
 
-      const trimW = right - left + 1;
-      const trimH = bottom - top + 1;
-      const trimCanvas = document.createElement('canvas');
-      trimCanvas.width = trimW;
-      trimCanvas.height = trimH;
-      trimCanvas.getContext('2d').drawImage(canvas, left, top, trimW, trimH, 0, 0, trimW, trimH);
-      resolve(trimCanvas.toDataURL('image/jpeg', 0.92));
-    };
-    img.onerror = () => resolve(dataURL);
-    img.src = dataURL;
-  });
+        top = Math.max(0, top - padding);
+        bottom = Math.min(h - 1, bottom + padding);
+        left = Math.max(0, left - padding);
+        right = Math.min(w - 1, right + padding);
+
+        const trimW = right - left + 1;
+        const trimH = bottom - top + 1;
+        const trimCanvas = document.createElement('canvas');
+        trimCanvas.width = trimW;
+        trimCanvas.height = trimH;
+        trimCanvas.getContext('2d').drawImage(canvas, left, top, trimW, trimH, 0, 0, trimW, trimH);
+        resolve(trimCanvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.onerror = () => resolve(dataURL);
+      img.src = dataURL;
+    });
+  } catch (err) {
+    console.warn('Image trim failed, using original:', err.message);
+    return dataURL;
+  }
 }
 
 
@@ -537,10 +547,24 @@ export async function scanReceipt(imageDataUrl, onStage) {
       const script = document.createElement('script');
       script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
       document.head.appendChild(script);
-      await new Promise((resolve, reject) => {
+      const loadPromise = new Promise((resolve, reject) => {
         script.onload = resolve;
         script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Tesseract.js loading timed out (30s)')), 30000)
+      );
+      await Promise.race([loadPromise, timeoutPromise]);
+
+      // Wait for Tesseract to fully initialize (up to 5 seconds)
+      let attempts = 0;
+      while (!window.Tesseract?.createWorker && attempts < 50) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+      }
+      if (!window.Tesseract?.createWorker) {
+        throw new Error('Tesseract.js failed to initialize');
+      }
     }
     const worker = await window.Tesseract.createWorker('eng');
     const ocrResult = await worker.recognize(trimmed);

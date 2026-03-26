@@ -50,6 +50,7 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
       const fd = new FormData();
       fd.append("photo", file);
       fd.append("type", "department");
+      if (photo.id) fd.append("photoId", photo.id);
       if (jobId) fd.append("job_id", jobId);
       if (deptId) fd.append("departmentId", deptId);
       if (photo.title) fd.append("title", photo.title);

@@ -143,6 +143,7 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
 
       setOcrResult({ parsed, confidence, filled });
     } catch (err) {
+      console.error('Receipt scan failed:', err);
       setOcrStage('error');
       setOcrResult({ error: err.message, filled: [] });
     } finally {
