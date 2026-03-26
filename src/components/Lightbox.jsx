@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { C, TF, MF } from '../tokens';
 import { getItemStatus } from '../tokens';
 import { Badge, Btn } from './ui';
@@ -7,6 +7,14 @@ import { put } from '../db';
 
 export default function Lightbox({ photo, imgSrc, allItems, onClose, onAnnotationSave }) {
   const [annotating, setAnnotating] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState(imgSrc);
+  useEffect(() => {
+    if (imgSrc && typeof imgSrc.then === 'function') {
+      imgSrc.then(url => { if (url) setResolvedSrc(url); });
+    } else {
+      setResolvedSrc(imgSrc);
+    }
+  }, [imgSrc]);
 
   const handleAnnotationSave = async (dataUrl) => {
     if (photo.id) {
@@ -43,8 +51,8 @@ export default function Lightbox({ photo, imgSrc, allItems, onClose, onAnnotatio
           }}>✕</button>
         </div>
 
-        {imgSrc && (
-          <img src={imgSrc} alt="" style={{
+        {resolvedSrc && (
+          <img src={resolvedSrc} alt="" style={{
             width: "100%", maxHeight: "68vh", objectFit: "contain",
             borderRadius: 10, border: `1px solid ${C.border}`
           }} />
@@ -81,7 +89,7 @@ export default function Lightbox({ photo, imgSrc, allItems, onClose, onAnnotatio
               {item.itemNumber} · {item.description?.slice(0, 28)}
             </span>
           ))}
-          {imgSrc && (
+          {resolvedSrc && (
             <Btn variant="orange" size="sm" icon="✏️" onClick={() => setAnnotating(true)}>Annotate</Btn>
           )}
         </div>
@@ -89,7 +97,7 @@ export default function Lightbox({ photo, imgSrc, allItems, onClose, onAnnotatio
 
       {annotating && (
         <PhotoAnnotator
-          imageSrc={imgSrc}
+          imageSrc={resolvedSrc}
           onSave={handleAnnotationSave}
           onCancel={() => setAnnotating(false)}
         />

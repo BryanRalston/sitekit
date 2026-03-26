@@ -354,13 +354,66 @@ export const api = {
 
   async getReferenceLibrary(params = {}) {
     const allPhotos = await getAll('photos');
+    const allItems = await getAll('items');
+    const allDepts = await getAll('departments');
+    const allJobs = await getAll('jobs');
+
+    // Build lookup maps
+    const deptById = Object.fromEntries(allDepts.map(d => [d.id, d]));
+    const jobById = Object.fromEntries(allJobs.map(j => [j.id, j]));
+
     let refPhotos = allPhotos.filter(p => p.isReference);
+
     if (params.excludeJobId) {
-      const depts = await getAll('departments');
-      const excludeDeptIds = depts.filter(d => d.jobId === params.excludeJobId).map(d => d.id);
+      const excludeDeptIds = allDepts.filter(d => d.jobId === params.excludeJobId).map(d => d.id);
       refPhotos = refPhotos.filter(p => !excludeDeptIds.includes(p.departmentId));
     }
-    return refPhotos;
+
+    // Enrich each photo with job_name, linked_count, and linked item data for filtering
+    refPhotos = refPhotos.map(p => {
+      const linkedItems = (p.linkedItemIds || [])
+        .map(lid => allItems.find(i => i.id === lid))
+        .filter(Boolean);
+      const dept = p.departmentId ? deptById[p.departmentId] : null;
+      const job = dept && dept.jobId ? jobById[dept.jobId] : null;
+      return {
+        ...p,
+        job_name: job ? job.name : null,
+        linked_count: linkedItems.length,
+        _linkedItems: linkedItems, // transient, used for filtering below
+      };
+    });
+
+    // Filter by item_number: match against photo title or any linked item's itemNumber
+    if (params.item_number) {
+      const q = params.item_number.toLowerCase();
+      refPhotos = refPhotos.filter(p =>
+        (p.title && p.title.toLowerCase().includes(q)) ||
+        p._linkedItems.some(i => i.itemNumber && i.itemNumber.toLowerCase().includes(q))
+      );
+    }
+
+    // Filter by vendor: match against any linked item's vendor
+    if (params.vendor) {
+      const q = params.vendor.toLowerCase();
+      refPhotos = refPhotos.filter(p =>
+        p._linkedItems.some(i => i.vendor && i.vendor.toLowerCase().includes(q))
+      );
+    }
+
+    // Filter by section: match against any linked item's section or the department name
+    if (params.section) {
+      const q = params.section.toLowerCase();
+      refPhotos = refPhotos.filter(p => {
+        const dept = p.departmentId ? deptById[p.departmentId] : null;
+        const deptMatch = dept && dept.name && dept.name.toLowerCase().includes(q);
+        const itemMatch = p._linkedItems.some(i => i.section && i.section.toLowerCase().includes(q));
+        return deptMatch || itemMatch;
+      });
+    }
+
+    // Strip transient _linkedItems before returning
+    return refPhotos.map(({ _linkedItems, ...rest }) => rest);
   },
 
   async getMatchedReferences(jobId) {

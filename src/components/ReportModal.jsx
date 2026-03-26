@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { C, TF, MF, STATUS, getItemStatus } from '../tokens';
 import { Modal, Btn, Inp, Badge } from './ui';
 import { api } from '../api';
@@ -144,6 +144,15 @@ async function exportPDF(job, items, groupBy) {
   }
 
   doc.save(`${job.name || 'report'}-fixtures-${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+function PhotoImg({ photoId, style }) {
+  const [src, setSrc] = React.useState(null);
+  React.useEffect(() => {
+    api.getPhotoUrl(photoId).then(url => { if (url) setSrc(url); });
+  }, [photoId]);
+  if (!src) return null;
+  return <img src={src} alt="" style={style} />;
 }
 
 const CONTRACTOR_KEY = 'sitekit_contractor';
@@ -433,7 +442,7 @@ export default function ReportModal({ job, groupBy, onClose }) {
                 </div>
                 {item.damageNotes && <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>{item.damageNotes}</div>}
                 {item.photo_id && (
-                  <img src={api.getPhotoUrl(item.photo_id)} alt="" style={{
+                  <PhotoImg photoId={item.photo_id} style={{
                     maxWidth: "100%", maxHeight: 150, borderRadius: 6,
                     border: `1px solid ${C.border}`
                   }} />

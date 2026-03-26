@@ -56,7 +56,7 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
           title: photo.title,
           notes: photo.notes,
           completed: photo.completed,
-          is_reference: photo.isReference || photo.is_reference,
+          isReference: photo.isReference || photo.is_reference,
           tag: photo.tag,
         });
       } catch {}

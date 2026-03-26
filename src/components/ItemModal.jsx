@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { C, MF } from '../tokens';
 import { Modal, Inp, Btn, Toggle } from './ui';
 import FixtureKnowledge from './FixtureKnowledge';
@@ -127,7 +127,12 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
   ) : null;
 
   // Load existing photo if item has one
-  const photoUrl = item?.photo_id ? api.getPhotoUrl(item.photo_id) : null;
+  const [photoUrl, setPhotoUrl] = useState(null);
+  useEffect(() => {
+    if (item?.photo_id) {
+      api.getPhotoUrl(item.photo_id).then(url => { if (url) setPhotoUrl(url); });
+    }
+  }, [item?.photo_id]);
 
   const handlePhoto = async (e) => {
     const file = e.target.files[0];

@@ -4,6 +4,15 @@ import { Modal, Btn, Inp } from './ui';
 import Lightbox from './Lightbox';
 import { api } from '../api';
 
+function RefPhoto({ photoId, style }) {
+  const [src, setSrc] = React.useState(null);
+  React.useEffect(() => {
+    api.getPhotoUrl(photoId).then(url => { if (url) setSrc(url); });
+  }, [photoId]);
+  if (!src) return null;
+  return <img src={src} alt="" style={style} onError={e => { e.target.style.display = 'none'; }} />;
+}
+
 export default function ReferenceBrowser({ currentJobId, onClose }) {
   const [refs, setRefs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,6 +20,15 @@ export default function ReferenceBrowser({ currentJobId, onClose }) {
   const [filterVendor, setFilterVendor] = useState("");
   const [filterSection, setFilterSection] = useState("");
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
+
+  useEffect(() => {
+    if (lightboxPhoto) {
+      api.getPhotoUrl(lightboxPhoto.id).then(url => { if (url) setLightboxSrc(url); });
+    } else {
+      setLightboxSrc(null);
+    }
+  }, [lightboxPhoto]);
 
   useEffect(() => {
     loadRefs();
@@ -91,8 +109,7 @@ export default function ReferenceBrowser({ currentJobId, onClose }) {
                   onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.borderColor = C.accent; }}
                   onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.borderColor = C.border; }}>
                   <div style={{ height: 125, background: C.bg, position: "relative" }}>
-                    <img src={api.getPhotoUrl(photo.id)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      onError={e => { e.target.style.display = "none"; }} />
+                    <RefPhoto photoId={photo.id} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     {photo.completed && (
                       <div style={{
                         position: "absolute", top: 5, right: 5,
@@ -128,10 +145,10 @@ export default function ReferenceBrowser({ currentJobId, onClose }) {
         </div>
       </div>
 
-      {lightboxPhoto && (
+      {lightboxPhoto && lightboxSrc && (
         <Lightbox
           photo={lightboxPhoto}
-          imgSrc={api.getPhotoUrl(lightboxPhoto.id)}
+          imgSrc={lightboxSrc}
           allItems={[]}
           onClose={() => setLightboxPhoto(null)}
         />

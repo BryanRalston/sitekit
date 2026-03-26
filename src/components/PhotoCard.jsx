@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { C } from '../tokens';
 import { Btn, Toggle } from './ui';
 import Lightbox from './Lightbox';
@@ -34,7 +34,12 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
   };
 
   const linked = allItems.filter(i => (photo.linkedItemIds || photo.linked_item_ids || []).includes(i.id));
-  const imgSrc = photo.id ? api.getPhotoUrl(photo.id) : null;
+  const [imgSrc, setImgSrc] = useState(null);
+  useEffect(() => {
+    if (photo.id) {
+      api.getPhotoUrl(photo.id).then(url => { if (url) setImgSrc(url); });
+    }
+  }, [photo.id]);
   const hasImage = photo.hasPhoto || photo.has_photo || photo.id;
 
   const handlePhoto = async (e) => {
@@ -46,7 +51,7 @@ export default function PhotoCard({ photo, allItems, color, onUpdate, onDelete, 
       fd.append("photo", file);
       fd.append("type", "department");
       if (jobId) fd.append("job_id", jobId);
-      if (deptId) fd.append("department_id", deptId);
+      if (deptId) fd.append("departmentId", deptId);
       if (photo.title) fd.append("title", photo.title);
       const result = await api.uploadPhoto(fd);
       onUpdate({ ...photo, ...result, hasPhoto: true });

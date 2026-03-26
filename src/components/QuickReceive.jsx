@@ -8,8 +8,8 @@ export default function QuickReceive({ item, onSave, onCancel }) {
 
   const handleSave = () => {
     onSave({
-      qty_received: parseInt(qty) || 0,
-      date_received: date,
+      qtyReceived: parseInt(qty) || 0,
+      dateReceived: date,
     });
   };
 

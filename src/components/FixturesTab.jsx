@@ -17,7 +17,7 @@ export default function FixturesTab({ job, onRefresh }) {
   const [showImport, setShowImport] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [search, setSearch] = useState("");
-  const [showQtyCol, setShowQtyCol] = useState(true);
+  const [showQtyCol, setShowQtyCol] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [groupBy, setGroupBy] = useState("vendor");
   const [quickReceiveId, setQuickReceiveId] = useState(null);
@@ -155,8 +155,8 @@ export default function FixturesTab({ job, onRefresh }) {
     const today = new Date().toISOString().slice(0, 10);
     try {
       await api.bulkReceive(job.id, {
-        item_ids: [...selectedIds],
-        date_received: today,
+        itemIds: [...selectedIds],
+        dateReceived: today,
       });
       toast.success(`${selectedIds.size} items marked received`);
       setSelectedIds(new Set());
