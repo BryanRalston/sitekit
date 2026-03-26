@@ -38,15 +38,13 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
     }
   };
 
-  const addPhoto = () => {
-    // Create a placeholder photo card — actual upload happens via PhotoCard
-    onUpdate({
-      ...dept,
-      photos: [...photos, {
-        id: null, title: "", notes: "", completed: false,
-        isReference: false, hasPhoto: false, linkedItemIds: [], tag: null
-      }]
-    });
+  const addPhoto = async () => {
+    try {
+      await api.createPhoto({ departmentId: dept.id, title: '', notes: '' });
+      onRefresh();
+    } catch (err) {
+      toast.error('Failed to add photo: ' + err.message);
+    }
   };
 
   const updatePhoto = async (photo) => {

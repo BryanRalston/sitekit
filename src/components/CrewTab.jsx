@@ -215,14 +215,28 @@ export default function CrewTab({ job, onCrewChange }) {
   };
 
   const handleDeleteMember = async (id) => {
-    try {
-      await api.deleteCrewMember(id);
-      await loadCrew();
-      onCrewChange?.();
-    } catch (err) {
-      toast.error('Delete failed: ' + err.message);
-      throw err;
-    }
+    const deletedMember = crewMembers.find(m => m.id === id);
+    if (!deletedMember) return;
+    // Optimistic removal from local state
+    setCrewMembers(prev => prev.filter(m => m.id !== id));
+    onCrewChange?.();
+    toast.undo(
+      `${deletedMember.name} removed from crew`,
+      // Undo: restore to local state
+      () => { setCrewMembers(prev => [...prev, deletedMember]); onCrewChange?.(); },
+      // Confirm delete: actually remove from DB
+      async () => {
+        try {
+          await api.deleteCrewMember(id);
+          onCrewChange?.();
+        } catch (err) {
+          toast.error('Delete failed: ' + err.message);
+          // Restore on failure
+          setCrewMembers(prev => [...prev, deletedMember]);
+          onCrewChange?.();
+        }
+      }
+    );
   };
 
   const handleDesktopCellClick = (memberId, dayIdx) => {

@@ -4,6 +4,7 @@ import { Btn } from './ui';
 import { useMobile } from '../hooks/useApi';
 import { api } from '../api';
 import ReceiptModal from './ReceiptModal';
+import ReceiptReportModal from './ReceiptReportModal';
 import { useToast } from './Toast';
 
 // Category color definitions (pastel bg + dark text)
@@ -53,8 +54,11 @@ export default function ReceiptsTab({ job, onRefresh }) {
   const [filterStatus, setFilterStatus] = useState('all'); // all | pending | submitted
   const [collapsedStores, setCollapsedStores] = useState(new Set());
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [viewMode, setViewMode] = useState('all'); // 'all' | 'gas'
+  const [gasPeriod, setGasPeriod] = useState('all'); // 'week' | 'month' | 'all'
+  const [showReport, setShowReport] = useState(false);
   const isMobile = useMobile();
-  const { toast, confirm: toastConfirm } = useToast();
+  const { toast } = useToast();
 
   const loadReceipts = useCallback(async () => {
     try {
@@ -119,17 +123,55 @@ export default function ReceiptsTab({ job, onRefresh }) {
     });
   }, [receipts, search, filterStatus]);
 
+  // Gas-filtered receipts (when in gas view)
+  const gasFilteredReceipts = useMemo(() => {
+    if (viewMode !== 'gas') return filteredReceipts;
+    const gasOnly = filteredReceipts.filter(r => r.isGas || r.category === 'Gas');
+    if (gasPeriod === 'all') return gasOnly;
+    const now = new Date();
+    const startDate = new Date();
+    if (gasPeriod === 'week') {
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1; // Monday start
+      startDate.setDate(now.getDate() - diff);
+    } else if (gasPeriod === 'month') {
+      startDate.setDate(1);
+    }
+    startDate.setHours(0, 0, 0, 0);
+    const startStr = startDate.toISOString().slice(0, 10);
+    return gasOnly.filter(r => r.date >= startStr);
+  }, [filteredReceipts, viewMode, gasPeriod]);
+
+  // Gas stats
+  const gasStats = useMemo(() => {
+    const allGas = receipts.filter(r => r.isGas || r.category === 'Gas');
+    const totalGasSpend = allGas.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+    const fillUps = allGas.length;
+    const avgPerFillUp = fillUps > 0 ? totalGasSpend / fillUps : 0;
+
+    // Period-filtered stats
+    const periodGas = gasFilteredReceipts;
+    const periodSpend = periodGas.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+    const periodFillUps = periodGas.length;
+    const periodAvg = periodFillUps > 0 ? periodSpend / periodFillUps : 0;
+
+    return { totalGasSpend, fillUps, avgPerFillUp, periodSpend, periodFillUps, periodAvg };
+  }, [receipts, gasFilteredReceipts]);
+
+  // Active receipts list (respects gas view)
+  const activeReceipts = viewMode === 'gas' ? gasFilteredReceipts : filteredReceipts;
+
   // Group by store
   const grouped = useMemo(() => {
     const groups = {};
-    filteredReceipts.forEach(r => {
+    activeReceipts.forEach(r => {
       const store = r.store || 'No Store';
       if (!groups[store]) groups[store] = [];
       groups[store].push(r);
     });
     // Sort stores alphabetically
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredReceipts]);
+  }, [activeReceipts]);
 
   // Stats
   const stats = useMemo(() => {
@@ -177,7 +219,19 @@ export default function ReceiptsTab({ job, onRefresh }) {
             jobId={job.id}
             onSave={handleRefresh}
             onClose={() => setEditReceipt(null)}
-            onDelete={editReceipt?.id ? async () => { await api.deleteReceipt(editReceipt.id); setEditReceipt(null); await handleRefresh(); } : undefined}
+            onDelete={editReceipt?.id ? async () => {
+              const deletedReceipt = editReceipt;
+              setReceipts(prev => prev.filter(r => r.id !== deletedReceipt.id));
+              setEditReceipt(null);
+              toast.undo(
+                'Receipt deleted',
+                () => { setReceipts(prev => [...prev, deletedReceipt]); },
+                async () => {
+                  try { await api.deleteReceipt(deletedReceipt.id); onRefresh(); }
+                  catch (err) { toast.error('Delete failed: ' + err.message); setReceipts(prev => [...prev, deletedReceipt]); }
+                }
+              );
+            } : undefined}
           />
         )}
       </>
@@ -232,8 +286,8 @@ export default function ReceiptsTab({ job, onRefresh }) {
           </div>
         )}
 
-        {/* Category breakdown pills */}
-        {categoryBreakdown.length > 0 && (
+        {/* Category breakdown pills (hidden in gas view) */}
+        {viewMode === 'all' && categoryBreakdown.length > 0 && (
           <div style={{
             display: 'flex', gap: 6, padding: '4px 18px 10px',
             flexWrap: isMobile ? 'nowrap' : 'wrap',
@@ -253,6 +307,91 @@ export default function ReceiptsTab({ job, onRefresh }) {
                 </span>
               );
             })}
+          </div>
+        )}
+
+        {/* View mode toggle: All Receipts | Gas Only */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '4px 18px 10px',
+          flexWrap: 'wrap',
+        }}>
+          {[
+            { id: 'all', label: 'All Receipts', icon: '🧾' },
+            { id: 'gas', label: 'Gas Only', icon: '⛽' },
+          ].map(mode => (
+            <button key={mode.id} onClick={() => setViewMode(mode.id)} style={{
+              padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit', minHeight: 32,
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              background: viewMode === mode.id
+                ? (mode.id === 'gas' ? CATEGORIES.Gas.bg : C.accentDim)
+                : 'transparent',
+              color: viewMode === mode.id
+                ? (mode.id === 'gas' ? CATEGORIES.Gas.color : C.accent)
+                : C.muted,
+              border: `1px solid ${viewMode === mode.id
+                ? (mode.id === 'gas' ? CATEGORIES.Gas.border : C.accentBorder)
+                : C.border}`,
+              transition: 'all 0.15s',
+            }}>
+              {mode.icon} {mode.label}
+            </button>
+          ))}
+
+          <div style={{ flex: 1 }} />
+
+          <Btn variant="ghost" size="sm" icon="📊" onClick={() => setShowReport(true)}>
+            Generate Report
+          </Btn>
+        </div>
+
+        {/* Gas stats panel (shown only in gas view) */}
+        {viewMode === 'gas' && (
+          <div style={{ padding: '0 18px 10px' }}>
+            {/* Period filter */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+              {[
+                { id: 'week', label: 'This Week' },
+                { id: 'month', label: 'This Month' },
+                { id: 'all', label: 'All Time' },
+              ].map(p => (
+                <button key={p.id} onClick={() => setGasPeriod(p.id)} style={{
+                  padding: '4px 12px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', minHeight: 28,
+                  background: gasPeriod === p.id ? CATEGORIES.Gas.bg : 'transparent',
+                  color: gasPeriod === p.id ? CATEGORIES.Gas.color : C.muted,
+                  border: `1px solid ${gasPeriod === p.id ? CATEGORIES.Gas.border : C.border}`,
+                  transition: 'all 0.15s',
+                }}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Gas stat cards */}
+            <div style={{
+              display: 'flex', gap: 10,
+              overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+            }}>
+              {[
+                { label: 'Gas Spend', value: formatCurrency(gasStats.periodSpend), color: CATEGORIES.Gas.color },
+                { label: 'Fill-ups', value: String(gasStats.periodFillUps), color: C.blue },
+                { label: 'Avg / Fill-up', value: formatCurrency(gasStats.periodAvg), color: C.teal },
+              ].map(s => (
+                <div key={s.label} style={{
+                  flex: isMobile ? '0 0 auto' : 1, minWidth: isMobile ? 110 : 0,
+                  padding: '10px 14px', background: C.bg, borderRadius: 8,
+                  border: `1px solid ${CATEGORIES.Gas.border}`,
+                }}>
+                  <div style={{ fontSize: 10, color: C.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                    {s.label}
+                  </div>
+                  <div style={{ ...MF, fontSize: 18, fontWeight: 700, color: s.color }}>
+                    {s.value}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -487,17 +626,36 @@ export default function ReceiptsTab({ job, onRefresh }) {
           onSave={handleRefresh}
           onClose={() => setEditReceipt(null)}
           onDelete={editReceipt?.id ? async () => {
-            const yes = await toastConfirm('Delete this receipt?', { confirmLabel: 'Delete', dangerous: true });
-            if (!yes) return;
-            try {
-              await api.deleteReceipt(editReceipt.id);
-              setEditReceipt(null);
-              await handleRefresh();
-              toast.success('Receipt deleted');
-            } catch (err) {
-              toast.error('Delete failed: ' + err.message);
-            }
+            const deletedReceipt = editReceipt;
+            // Optimistic removal from local state
+            setReceipts(prev => prev.filter(r => r.id !== deletedReceipt.id));
+            setEditReceipt(null);
+            toast.undo(
+              'Receipt deleted',
+              // Undo: restore receipt to local state and refresh from DB
+              () => { setReceipts(prev => [...prev, deletedReceipt]); },
+              // Confirm delete: actually remove from DB
+              async () => {
+                try {
+                  await api.deleteReceipt(deletedReceipt.id);
+                  onRefresh();
+                } catch (err) {
+                  toast.error('Delete failed: ' + err.message);
+                  // Restore on failure
+                  setReceipts(prev => [...prev, deletedReceipt]);
+                }
+              }
+            );
           } : undefined}
+        />
+      )}
+
+      {/* Receipt Report Modal */}
+      {showReport && (
+        <ReceiptReportModal
+          job={job}
+          receipts={receipts}
+          onClose={() => setShowReport(false)}
         />
       )}
     </>

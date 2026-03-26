@@ -156,15 +156,16 @@ export function ToastProvider({ children }) {
   const dismiss = useCallback((id) => {
     setToasts(prev => prev.filter(t => t.id !== id));
     // If there was a confirm resolver and it was never resolved, resolve true (default action proceeds)
+    // For undo toasts dismissed without clicking Undo, false triggers the deleteCallback
     if (resolversRef.current[id]) {
-      resolversRef.current[id](true);
+      resolversRef.current[id](false);
       delete resolversRef.current[id];
     }
   }, []);
 
   const handleAction = useCallback((id, actionKey) => {
     if (resolversRef.current[id]) {
-      resolversRef.current[id](actionKey === 'yes');
+      resolversRef.current[id](actionKey === 'yes' || actionKey === 'undo');
       delete resolversRef.current[id];
     }
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -176,11 +177,46 @@ export function ToastProvider({ children }) {
     return id;
   }, []);
 
+  const undoTimersRef = useRef({});
+
   const toast = {
     success: (msg, opts) => addToast('success', msg, opts),
     error: (msg, opts) => addToast('error', msg, opts),
     info: (msg, opts) => addToast('info', msg, opts),
     warning: (msg, opts) => addToast('warning', msg, opts),
+    /**
+     * Show an undo toast. Calls deleteCallback after timeout unless user clicks Undo.
+     * @param {string} message - e.g. "Receipt deleted"
+     * @param {Function} undoCallback - called if user clicks Undo
+     * @param {Function} deleteCallback - called when timeout expires (actual delete)
+     * @param {number} timeout - ms before real delete (default 5000)
+     */
+    undo: (message, undoCallback, deleteCallback, timeout = 5000) => {
+      const id = nextId++;
+      // Set timer for the real delete
+      undoTimersRef.current[id] = setTimeout(() => {
+        deleteCallback();
+        delete undoTimersRef.current[id];
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, timeout);
+      setToasts(prev => [...prev.slice(-(MAX_TOASTS - 1)), {
+        id,
+        type: 'warning',
+        message,
+        duration: 0, // managed by our own timer
+        actions: [
+          { key: 'undo', label: 'Undo', variant: 'primary' },
+        ],
+      }]);
+      // Store the undo callback in resolvers so handleAction can find it
+      resolversRef.current[id] = (didUndo) => {
+        clearTimeout(undoTimersRef.current[id]);
+        delete undoTimersRef.current[id];
+        if (didUndo) undoCallback();
+        else deleteCallback();
+      };
+      return id;
+    },
   };
 
   const confirm = useCallback((message, options = {}) => {

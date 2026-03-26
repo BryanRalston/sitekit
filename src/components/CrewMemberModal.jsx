@@ -6,7 +6,7 @@ import { useToast } from './Toast';
 const ROLES = ['Lead', 'Journeyman', 'Helper', 'Apprentice', 'Other'];
 
 export default function CrewMemberModal({ member, onSave, onClose, onDelete }) {
-  const { toast, confirm: toastConfirm } = useToast();
+  const { toast } = useToast();
   const isEditing = !!member;
 
   const [name, setName] = useState(member?.name || '');
@@ -42,10 +42,6 @@ export default function CrewMemberModal({ member, onSave, onClose, onDelete }) {
   };
 
   const handleDelete = async () => {
-    const yes = await toastConfirm('Delete this crew member? This will also delete all their time entries.', {
-      confirmLabel: 'Delete', dangerous: true,
-    });
-    if (!yes) return;
     try {
       await onDelete(member.id);
       onClose();

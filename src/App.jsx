@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { C, TF, MF } from './tokens';
 import { Btn } from './components/ui';
 import Sidebar, { NewJobModal } from './components/Sidebar';
@@ -25,6 +25,47 @@ export default function App() {
         <AppInner />
       </ToastProvider>
     </ErrorBoundary>
+  );
+}
+
+function OfflineBanner() {
+  const [online, setOnline] = useState(navigator.onLine);
+  const [showReconnected, setShowReconnected] = useState(false);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    const goOffline = () => {
+      setOnline(false);
+      setShowReconnected(false);
+      clearTimeout(timerRef.current);
+    };
+    const goOnline = () => {
+      setOnline(true);
+      setShowReconnected(true);
+      timerRef.current = setTimeout(() => setShowReconnected(false), 3000);
+    };
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+      clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  if (online && !showReconnected) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+      padding: '5px 12px', textAlign: 'center', fontSize: 12, fontWeight: 600,
+      fontFamily: 'inherit', transition: 'opacity 0.3s',
+      background: online ? 'rgba(63,185,80,0.9)' : 'rgba(210,153,34,0.9)',
+      color: online ? '#fff' : '#1a1a1a',
+      opacity: online && showReconnected ? 1 : online ? 0 : 1,
+    }}>
+      {online ? 'Back online' : "You're offline \u2014 data is saved locally"}
+    </div>
   );
 }
 
@@ -222,6 +263,7 @@ function AppInner() {
 
   return (
     <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.text, overflow: "hidden" }}>
+      <OfflineBanner />
       <a href="#main-content" className="skip-link" style={{
         position: 'absolute', top: -40, left: 0, background: '#22D3EE', color: '#000',
         padding: '8px 16px', zIndex: 1000, fontSize: 14, fontWeight: 700,

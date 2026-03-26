@@ -336,6 +336,20 @@ export const api = {
     return updated;
   },
 
+  async createPhoto({ departmentId, title, notes }) {
+    const id = generateId();
+    const photo = {
+      id, departmentId: departmentId || null,
+      title: sanitize(title || ''), notes: sanitize(notes || ''),
+      photoType: 'department',
+      completed: false, isReference: false, hasPhoto: false,
+      tags: [], linkedItemIds: [],
+      createdAt: new Date().toISOString(),
+    };
+    await put('photos', photo);
+    return photo;
+  },
+
   async deletePhoto(id) {
     await del('photos', id);
     await del('blobs', id).catch(() => {});
@@ -878,6 +892,83 @@ export const api = {
       shortageResolutions,
       feedback,
     };
+  },
+
+  // ── Import (restore SiteKit backup) ──────────────────────────────────────
+
+  async importData(data) {
+    if (data.app !== 'SiteKit') throw new Error('Not a SiteKit backup');
+
+    let jobCount = 0, itemCount = 0, deptCount = 0, photoCount = 0;
+    let receiptCount = 0, blobCount = 0;
+
+    for (const exportedJob of (data.jobs || [])) {
+      const { items: jobItems, departments: jobDepts, receipts: jobReceipts, ...jobRecord } = exportedJob;
+      await put('jobs', jobRecord);
+      jobCount++;
+
+      // Items
+      for (const item of (jobItems || [])) {
+        await put('items', item);
+        itemCount++;
+      }
+
+      // Departments + photos + photo blobs
+      for (const dept of (jobDepts || [])) {
+        const { photos: deptPhotos, ...deptRecord } = dept;
+        await put('departments', deptRecord);
+        deptCount++;
+
+        for (const photo of (deptPhotos || [])) {
+          const { blob, ...photoRecord } = photo;
+          await put('photos', photoRecord);
+          photoCount++;
+          if (blob) {
+            await put('blobs', { id: photo.id, data: blob });
+            blobCount++;
+          }
+        }
+      }
+
+      // Receipts + receipt blobs
+      for (const receipt of (jobReceipts || [])) {
+        const { blob, ...receiptRecord } = receipt;
+        if (blob) {
+          await put('receipt_blobs', { id: receipt.id, data: blob });
+          receiptRecord.hasPhoto = true;
+          blobCount++;
+        }
+        await put('receipts', receiptRecord);
+        receiptCount++;
+      }
+    }
+
+    // Fixture knowledge
+    for (const fk of (data.fixtureKnowledge || [])) {
+      await put('fixture_knowledge', fk);
+    }
+
+    // Crew members
+    for (const cm of (data.crewMembers || [])) {
+      await put('crew_members', cm);
+    }
+
+    // Time entries
+    for (const te of (data.timeEntries || [])) {
+      await put('time_entries', te);
+    }
+
+    // Shortage resolutions
+    for (const sr of (data.shortageResolutions || [])) {
+      await put('shortage_resolutions', sr);
+    }
+
+    // Feedback
+    for (const fb of (data.feedback || [])) {
+      await put('feedback', fb);
+    }
+
+    return { jobCount, itemCount, deptCount, photoCount, receiptCount, blobCount };
   },
 
   // ── Auth ──────────────────────────────────────────────────────────────────
