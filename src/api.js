@@ -848,13 +848,29 @@ export const api = {
     const timeEntries = await getAll('time_entries');
     const shortageResolutions = await getAll('shortage_resolutions');
     const feedback = await getAll('feedback');
+
+    // Include actual image data so backups are fully restorable
+    const blobs = await getAll('blobs');
+    const receiptBlobs = await getAll('receipt_blobs');
+    const blobMap = Object.fromEntries(blobs.map(b => [b.id, b.data]));
+    const receiptBlobMap = Object.fromEntries(receiptBlobs.map(b => [b.id, b.data]));
+
     return {
-      exportDate: new Date().toISOString(), version: '1.0', app: 'SiteKit',
+      exportDate: new Date().toISOString(), version: '1.1', app: 'SiteKit',
       jobs: jobs.map(j => ({
         ...j,
         items: items.filter(i => i.jobId === j.id),
-        departments: depts.filter(d => d.jobId === j.id).map(d => ({ ...d, photos: photos.filter(p => p.departmentId === d.id) })),
-        receipts: receipts.filter(r => r.jobId === j.id),
+        departments: depts.filter(d => d.jobId === j.id).map(d => ({
+          ...d,
+          photos: photos.filter(p => p.departmentId === d.id).map(p => ({
+            ...p,
+            blob: blobMap[p.id] || null,
+          })),
+        })),
+        receipts: receipts.filter(r => r.jobId === j.id).map(r => ({
+          ...r,
+          blob: r.hasPhoto ? (receiptBlobMap[r.id] || null) : undefined,
+        })),
       })),
       fixtureKnowledge: fk,
       crewMembers,

@@ -4,8 +4,23 @@ import { Btn, Inp, Modal, Toggle } from './ui';
 import { api } from '../api';
 import { CATEGORIES } from './ReceiptsTab';
 import { useToast } from './Toast';
+import { scanReceipt } from '../lib/receipt-scanner';
 
 const CATEGORY_LIST = ['Materials', 'Tools', 'Gas', 'Permits', 'Meals', 'Rental', 'Other'];
+
+const STAGE_LABELS = {
+  enhancing: 'Enhancing image...',
+  scanning: 'Scanning text...',
+  parsing: 'Parsing receipt...',
+  done: 'Complete',
+  error: 'Scan failed',
+};
+
+const CONFIDENCE_STYLES = {
+  high:   { color: C.green, bg: C.greenDim, border: C.greenBorder, label: 'High confidence' },
+  medium: { color: C.yellow, bg: C.yellowDim, border: C.yellowBorder, label: 'Medium confidence' },
+  low:    { color: C.red, bg: C.redDim, border: C.redBorder, label: 'Low confidence' },
+};
 
 function validateReceipt(f) {
   const errors = {};
@@ -38,7 +53,9 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
   const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrResult, setOcrResult] = useState(null); // null | { store, amount, date, filled: [] }
+  const [ocrStage, setOcrStage] = useState(null); // 'enhancing' | 'scanning' | 'parsing' | 'done' | 'error'
+  const [ocrResult, setOcrResult] = useState(null); // { parsed, confidence, filled, error? }
+  const [parsedItems, setParsedItems] = useState(receipt?.items || []);
 
   // Load store names for autocomplete
   useEffect(() => {
@@ -74,75 +91,24 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
     if (!file) return;
     setPhotoFile(file);
     setOcrResult(null);
+    setOcrStage(null);
+    setParsedItems(receipt?.items || []);
     const reader = new FileReader();
     reader.onload = () => setPhotoPreview(reader.result);
     reader.readAsDataURL(file);
-  };
-
-  const runOCR = async (imageDataUrl) => {
-    // Dynamically load Tesseract.js from CDN
-    if (!window.Tesseract) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-      document.head.appendChild(script);
-      await new Promise((resolve, reject) => {
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
-      });
-    }
-    const worker = await window.Tesseract.createWorker('eng');
-    const result = await worker.recognize(imageDataUrl);
-    await worker.terminate();
-    return result.data.text;
-  };
-
-  const parseReceiptText = (text) => {
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-    // Extract amount: look for TOTAL, AMOUNT DUE, etc. followed by dollar amount
-    let amount = '';
-    const totalRe = /(?:total|amount\s*due|balance|grand\s*total)[:\s]*\$?([\d,]+\.\d{2})/i;
-    const reversed = [...lines].reverse();
-    for (const line of reversed) {
-      const m = line.match(totalRe);
-      if (m) { amount = m[1].replace(/,/g, ''); break; }
-    }
-    // Fallback: largest dollar amount
-    if (!amount) {
-      const amounts = text.match(/\$?([\d,]+\.\d{2})/g) || [];
-      const parsed = amounts.map(a => parseFloat(a.replace(/[$,]/g, ''))).filter(n => n > 0 && n < 10000);
-      if (parsed.length) amount = Math.max(...parsed).toFixed(2);
-    }
-
-    // Extract date: MM/DD/YYYY or MM-DD-YYYY
-    let date = '';
-    const dateRe = /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/;
-    const dateMatch = text.match(dateRe);
-    if (dateMatch) {
-      const [, mm, dd, yy] = dateMatch;
-      const year = yy.length === 2 ? '20' + yy : yy;
-      date = `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
-    }
-
-    // Extract store: first substantial line
-    let store = '';
-    for (const line of lines) {
-      if (line.length > 3 && line.length < 40 && /[a-zA-Z]{2,}/.test(line) && !/^\d+$/.test(line) && !/phone|tel|fax|www|http/i.test(line)) {
-        store = line;
-        break;
-      }
-    }
-
-    return { store, amount, date };
   };
 
   const handleOCR = async () => {
     if (!photoPreview) return;
     setOcrLoading(true);
     setOcrResult(null);
+    setOcrStage(null);
     try {
-      const ocrText = await runOCR(photoPreview);
-      const parsed = parseReceiptText(ocrText);
+      const { parsed, confidence } = await scanReceipt(
+        photoPreview,
+        (stage) => setOcrStage(stage),
+      );
+
       const filled = [];
 
       // Auto-fill only empty fields
@@ -158,9 +124,26 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
         set('date')(parsed.date);
         filled.push('date');
       }
+      // Auto-fill category if detected and still default
+      if (parsed.category && f.category === 'Materials' && parsed.category !== 'Materials') {
+        set('category')(parsed.category);
+        if (parsed.category === 'Gas') set('isGas')(true);
+        filled.push('category');
+      }
 
-      setOcrResult({ ...parsed, filled });
+      // Auto-fill items from parsed line items
+      if (parsed.items.length > 0) {
+        setParsedItems(parsed.items.map(it => ({
+          name: it.name,
+          qty: it.qty,
+          price: it.totalPrice,
+        })));
+        filled.push(`${parsed.items.length} items`);
+      }
+
+      setOcrResult({ parsed, confidence, filled });
     } catch (err) {
+      setOcrStage('error');
       setOcrResult({ error: err.message, filled: [] });
     } finally {
       setOcrLoading(false);
@@ -186,7 +169,7 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
         category: f.category,
         isGas: f.isGas,
         notes: f.notes.trim(),
-        items: receipt?.items || [],
+        items: parsedItems,
         submitted: f.submitted,
         hasPhoto: !!(photoFile || photoPreview),
       };
@@ -214,7 +197,9 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
     }
   };
 
-  const items = receipt?.items || [];
+  // Subtotal/tax from OCR parse
+  const ocrSubtotal = ocrResult?.parsed?.subtotal;
+  const ocrTax = ocrResult?.parsed?.tax;
 
   return (
     <Modal title={isEditing ? 'Edit Receipt' : 'New Receipt'} onClose={onClose} width={520}>
@@ -257,17 +242,35 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
                   borderTopColor: C.teal, borderRadius: '50%',
                   animation: 'spin 0.8s linear infinite',
                 }} />
-                Scanning...
+                {STAGE_LABELS[ocrStage] || 'Processing...'}
               </span>
             )}
           </div>
-          {/* OCR result feedback */}
+
+          {/* OCR result feedback with confidence */}
           {ocrResult && !ocrResult.error && ocrResult.filled.length > 0 && (
-            <div style={{
-              padding: '6px 12px', background: C.tealDim, border: `1px solid ${C.tealBorder}`,
-              borderRadius: 6, fontSize: 11, color: C.teal, fontWeight: 600,
-            }}>
-              OCR filled: {ocrResult.filled.join(', ')}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{
+                padding: '6px 12px', background: C.tealDim, border: `1px solid ${C.tealBorder}`,
+                borderRadius: 6, fontSize: 11, color: C.teal, fontWeight: 600,
+              }}>
+                Filled: {ocrResult.filled.join(', ')}
+              </div>
+              {ocrResult.confidence && (
+                <div style={{
+                  padding: '4px 12px',
+                  background: CONFIDENCE_STYLES[ocrResult.confidence.level].bg,
+                  border: `1px solid ${CONFIDENCE_STYLES[ocrResult.confidence.level].border}`,
+                  borderRadius: 6, fontSize: 10, fontWeight: 600,
+                  color: CONFIDENCE_STYLES[ocrResult.confidence.level].color,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span>{CONFIDENCE_STYLES[ocrResult.confidence.level].label}</span>
+                  <span style={{ opacity: 0.7 }}>
+                    ({Math.round(ocrResult.confidence.score * 100)}%)
+                  </span>
+                </div>
+              )}
             </div>
           )}
           {ocrResult && !ocrResult.error && ocrResult.filled.length === 0 && (
@@ -275,7 +278,7 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
               padding: '6px 12px', background: C.yellowDim, border: `1px solid ${C.yellowBorder}`,
               borderRadius: 6, fontSize: 11, color: C.yellow,
             }}>
-              OCR complete — no new fields to fill (all fields already have values)
+              Scan complete — no new fields to fill (all fields already have values)
             </div>
           )}
           {ocrResult && ocrResult.error && (
@@ -283,7 +286,7 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
               padding: '6px 12px', background: C.redDim, border: `1px solid ${C.redBorder}`,
               borderRadius: 6, fontSize: 11, color: C.red,
             }}>
-              OCR failed: {ocrResult.error}
+              Scan failed: {ocrResult.error}
             </div>
           )}
         </div>
@@ -384,30 +387,43 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
         {/* Notes */}
         <Inp label="Notes" value={f.notes} onChange={set('notes')} multiline rows={2} placeholder="Optional notes..." />
 
-        {/* Items section (OCR parsed, read-only) */}
-        {items.length > 0 && (
+        {/* Parsed Items section */}
+        {parsedItems.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
-              Parsed Items
+              Parsed Items ({parsedItems.length})
             </label>
             <div style={{
               background: C.bg, borderRadius: 8, border: `1px solid ${C.borderLight}`,
-              overflow: 'hidden',
+              overflow: 'hidden', maxHeight: 200, overflowY: 'auto',
             }}>
-              {items.map((item, i) => (
+              {parsedItems.map((item, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '6px 12px', fontSize: 12,
-                  borderBottom: i < items.length - 1 ? `1px solid ${C.borderLight}` : 'none',
+                  borderBottom: i < parsedItems.length - 1 ? `1px solid ${C.borderLight}` : 'none',
                 }}>
                   <span style={{ flex: 1, color: C.text }}>{item.name}</span>
-                  {item.qty && <span style={{ ...MF, color: C.muted, fontSize: 11 }}>x{item.qty}</span>}
+                  {item.qty > 1 && <span style={{ ...MF, color: C.muted, fontSize: 11 }}>x{item.qty}</span>}
                   <span style={{ ...MF, color: C.text, fontWeight: 600, fontSize: 12 }}>
-                    ${(parseFloat(item.price) || 0).toFixed(2)}
+                    ${(parseFloat(item.price ?? item.totalPrice) || 0).toFixed(2)}
                   </span>
                 </div>
               ))}
             </div>
+            {/* Subtotal / Tax row if available */}
+            {(ocrSubtotal != null || ocrTax != null) && (
+              <div style={{
+                display: 'flex', gap: 16, padding: '4px 12px', fontSize: 11, color: C.muted,
+              }}>
+                {ocrSubtotal != null && (
+                  <span>Subtotal: <span style={{ ...MF, color: C.text, fontWeight: 600 }}>${ocrSubtotal.toFixed(2)}</span></span>
+                )}
+                {ocrTax != null && (
+                  <span>Tax: <span style={{ ...MF, color: C.text, fontWeight: 600 }}>${ocrTax.toFixed(2)}</span></span>
+                )}
+              </div>
+            )}
           </div>
         )}
 

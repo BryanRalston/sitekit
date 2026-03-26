@@ -319,7 +319,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
   // Desktop: render sidebar directly
   // Mobile: render as overlay drawer
   return (
-    <nav>
+    <nav role="navigation" aria-label="Job sidebar">
       {/* Desktop sidebar */}
       <div className="desktop-only" style={{ display: "flex", flexShrink: 0 }}>
         {sidebarContent}

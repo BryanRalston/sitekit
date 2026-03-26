@@ -25,9 +25,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Serve photo files
 app.use('/api/photos/file', express.static(PHOTOS_DIR));
 
-// Serve static files in production
+// Serve static files in production (dist built with base: '/sitekit/')
 const distPath = path.join(PROJECT_ROOT, 'dist');
 if (fs.existsSync(distPath)) {
+  app.use('/sitekit', express.static(distPath));
   app.use(express.static(distPath));
 }
 
@@ -39,12 +40,13 @@ app.use(photosRouter);
 app.use(importRouter);
 app.use(receiptsRouter);
 
-// SPA fallback for production
+// SPA fallback for production — only for client-side routes, not asset files
 if (fs.existsSync(distPath)) {
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api/')) {
-      res.sendFile(path.join(distPath, 'index.html'));
+  app.get('/{*splat}', (req, res, next) => {
+    if (req.path.startsWith('/api/') || path.extname(req.path)) {
+      return next();
     }
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 

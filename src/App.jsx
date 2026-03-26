@@ -6,10 +6,12 @@ import FixturesTab from './components/FixturesTab';
 import VisualRefTab from './components/VisualRefTab';
 import ReceiptsTab from './components/ReceiptsTab';
 import CrewTab from './components/CrewTab';
+import IssuesTab from './components/IssuesTab';
 import PinGate from './components/PinGate';
 import Tutorial, { TutorialPrompt } from './components/Tutorial';
 import GlobalSearch from './components/GlobalSearch';
 import FeedbackWidget from './components/FeedbackWidget';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider, useToast } from './components/Toast';
 import { SkeletonList } from './components/Skeleton';
 import { api } from './api';
@@ -18,9 +20,11 @@ import { getOne, put } from './db';
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AppInner />
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -218,7 +222,13 @@ function AppInner() {
 
   return (
     <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.text, overflow: "hidden" }}>
-      <a href="#main-content" style={{position:'absolute',left:'-9999px',top:'auto',width:'1px',height:'1px',overflow:'hidden'}}>Skip to main content</a>
+      <a href="#main-content" className="skip-link" style={{
+        position: 'absolute', top: -40, left: 0, background: '#22D3EE', color: '#000',
+        padding: '8px 16px', zIndex: 1000, fontSize: 14, fontWeight: 700,
+        transition: 'top 0.2s',
+      }} onFocus={e => e.target.style.top = '0'} onBlur={e => e.target.style.top = '-40px'}>
+        Skip to main content
+      </a>
 
       {/* Sidebar */}
       <Sidebar
@@ -232,7 +242,7 @@ function AppInner() {
       />
 
       {/* Main content */}
-      <main id="main-content" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <main id="main-content" role="main" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Mobile header */}
         <div className="mobile-only" style={{
@@ -362,7 +372,7 @@ function AppInner() {
                   {activeJobFull.date && <span>{activeJobFull.date}</span>}
                 </div>
               </div>
-              <div style={{ display: "flex", padding: "10px 22px 0", gap: 3, overflowX: "auto", alignItems: "center" }}>
+              <nav role="navigation" aria-label="Job tabs" style={{ display: "flex", padding: "10px 22px 0", gap: 3, overflowX: "auto", alignItems: "center" }}>
                 {[
                   {
                     id: "fixtures", icon: "📋", label: "Fixtures",
@@ -383,6 +393,11 @@ function AppInner() {
                     id: "crew", icon: "👷", label: "Crew",
                     count: crewCount,
                     tutorial: "tab-crew"
+                  },
+                  {
+                    id: "issues", icon: "⚠️", label: "Issues",
+                    count: (activeJobFull.items || []).filter(i => (i.missingParts && !i.missingPartsReported) || (i.damaged && !i.damageReported) || (i.additionalOrders && !i.additionalOrdersReported)).length,
+                    tutorial: "tab-issues"
                   },
                 ].map(tab => {
                   const isA = activeTab === tab.id;
@@ -420,7 +435,7 @@ function AppInner() {
                 >
                   &#x1F50D; <span style={{ fontSize: 11 }}>Search</span>
                 </button>
-              </div>
+              </nav>
             </div>
 
             {/* Tab content */}
@@ -442,6 +457,9 @@ function AppInner() {
                   )}
                   {activeTab === "crew" && (
                     <CrewTab key={activeJobId + "-c"} job={activeJobFull} onCrewChange={refreshCrewCount} />
+                  )}
+                  {activeTab === "issues" && (
+                    <IssuesTab key={activeJobId + "-i"} job={activeJobFull} onRefresh={refresh} />
                   )}
                 </>
               )}
