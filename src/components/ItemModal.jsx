@@ -137,6 +137,7 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
   const handlePhoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    e.target.value = '';
     setUploading(true);
     try {
       // Show local preview immediately
@@ -280,7 +281,7 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
                           }}>✕</button>
                       </div>
                     )}
-                    <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }} onChange={handlePhoto} capture="environment" />
+                    <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }} onChange={handlePhoto} />
                     <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current.click()}>
                       {displayPhoto ? "Replace" : "Add Photo"}
                     </Btn>
