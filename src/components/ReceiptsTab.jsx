@@ -17,6 +17,23 @@ export const CATEGORIES = {
   Other:     { bg: '#F0F2F7', color: '#475569', border: 'rgba(71,85,105,0.25)' },
 };
 
+function ReceiptThumbnail({ receiptId }) {
+  const [src, setSrc] = React.useState(null);
+  React.useEffect(() => {
+    api.getReceiptPhotoUrl(receiptId).then(url => { if (url) setSrc(url); });
+  }, [receiptId]);
+  if (!src) return null;
+  return (
+    <div style={{
+      width: 36, height: 36, borderRadius: 6, overflow: 'hidden',
+      flexShrink: 0, background: C.bg, border: `1px solid ${C.borderLight}`,
+    }}>
+      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        onError={e => { e.target.style.display = 'none'; }} />
+    </div>
+  );
+}
+
 function formatCurrency(amount) {
   const n = parseFloat(amount) || 0;
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -407,19 +424,7 @@ export default function ReceiptsTab({ job, onRefresh }) {
                       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                     >
                       {/* Photo thumbnail */}
-                      {receipt.hasPhoto && (
-                        <div style={{
-                          width: 36, height: 36, borderRadius: 6, overflow: 'hidden',
-                          flexShrink: 0, background: C.bg, border: `1px solid ${C.borderLight}`,
-                        }}>
-                          <img
-                            src={api.getReceiptPhotoUrl(receipt.id)}
-                            alt=""
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={e => { e.target.style.display = 'none'; }}
-                          />
-                        </div>
-                      )}
+                      {receipt.hasPhoto && <ReceiptThumbnail receiptId={receipt.id} />}
 
                       {/* Date */}
                       <div style={{ fontSize: 11, color: C.muted, minWidth: 46, flexShrink: 0 }}>

@@ -12,7 +12,16 @@ db.exec(`
   );
 `);
 
+// PBKDF2 — stronger hash for short PINs (matches client-side implementation)
+const PIN_SALT = 'sitekit-pin-v1';
+const PBKDF2_ITERATIONS = 100000;
+
 function hashPin(pin) {
+  return crypto.pbkdf2Sync(pin, PIN_SALT, PBKDF2_ITERATIONS, 32, 'sha256').toString('hex');
+}
+
+// Legacy SHA-256 hash — kept for backward compat with pre-migration PINs
+function hashPinLegacy(pin) {
   return crypto.createHash('sha256').update(pin).digest('hex');
 }
 
@@ -61,8 +70,19 @@ router.post('/api/auth/verify', (req, res) => {
       return res.status(400).json({ error: 'No PIN configured' });
     }
 
-    const valid = row.value === hashPin(pin);
-    res.json({ valid });
+    // Try PBKDF2 first (current method)
+    const pbkdf2Hash = hashPin(pin);
+    if (row.value === pbkdf2Hash) {
+      return res.json({ valid: true });
+    }
+    // Fallback: try legacy SHA-256 hash (pre-migration PINs)
+    const legacyHash = hashPinLegacy(pin);
+    if (row.value === legacyHash) {
+      // Silently migrate to PBKDF2 on successful legacy login
+      run("UPDATE app_config SET value = ? WHERE key = 'pin_hash'", [pbkdf2Hash]);
+      return res.json({ valid: true });
+    }
+    res.json({ valid: false });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -84,10 +104,14 @@ router.post('/api/auth/change', (req, res) => {
       return res.status(400).json({ error: 'No PIN configured' });
     }
 
-    if (row.value !== hashPin(currentPin)) {
+    // Try PBKDF2 first, then legacy SHA-256
+    const currentPbkdf2 = hashPin(currentPin);
+    const currentLegacy = hashPinLegacy(currentPin);
+    if (row.value !== currentPbkdf2 && row.value !== currentLegacy) {
       return res.json({ valid: false, error: 'Current PIN is incorrect' });
     }
 
+    // Always store new PIN with PBKDF2
     const newHash = hashPin(newPin);
     run("UPDATE app_config SET value = ? WHERE key = 'pin_hash'", [newHash]);
     res.json({ valid: true, success: true });

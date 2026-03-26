@@ -11,6 +11,70 @@ const TYPES = [
   { key: 'feature', icon: '\uD83D\uDCA1', label: 'Feature' },
 ];
 
+// Generate a stable device ID (persisted in localStorage)
+function getDeviceId() {
+  let id = localStorage.getItem('sitekit_device_id');
+  if (!id) {
+    id = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    localStorage.setItem('sitekit_device_id', id);
+  }
+  return id;
+}
+
+// Tunnel URL discovery via GitHub Gist (public, no auth needed)
+const TUNNEL_GIST_RAW = 'https://gist.githubusercontent.com/BryanRalston/27f2cca438d4b1c7c22940a609d5f965/raw/tunnel_url.txt';
+const TUNNEL_CACHE_KEY = 'sitekit_tunnel_url';
+const TUNNEL_CACHE_TS_KEY = 'sitekit_tunnel_url_ts';
+const TUNNEL_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+async function getTunnelUrl() {
+  // 1. Manual override always wins
+  const manual = localStorage.getItem('sitekit_feedback_url');
+  if (manual) return manual;
+
+  // 2. Check cache (TTL-based)
+  const cached = localStorage.getItem(TUNNEL_CACHE_KEY);
+  const cachedTs = parseInt(localStorage.getItem(TUNNEL_CACHE_TS_KEY) || '0', 10);
+  if (cached && Date.now() - cachedTs < TUNNEL_CACHE_TTL) {
+    return cached + '/api/sitekit/feedback';
+  }
+
+  // 3. Fetch from Gist (lazy — only on submit)
+  try {
+    const res = await fetch(TUNNEL_GIST_RAW, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const url = (await res.text()).trim();
+    if (!url || !url.startsWith('https://')) return null;
+    // Cache it
+    localStorage.setItem(TUNNEL_CACHE_KEY, url);
+    localStorage.setItem(TUNNEL_CACHE_TS_KEY, String(Date.now()));
+    return url + '/api/sitekit/feedback';
+  } catch {
+    return null;
+  }
+}
+
+// Fire-and-forget remote feedback submission
+async function sendRemoteFeedback(entry) {
+  try {
+    const url = await getTunnelUrl();
+    if (!url) return; // No tunnel URL available — skip silently
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: entry.type,
+        message: entry.message,
+        page: entry.page,
+        deviceId: getDeviceId(),
+        userAgent: navigator.userAgent,
+      }),
+    }).catch(() => {}); // Silently ignore network errors — local copy is the fallback
+  } catch {
+    // Ignore — don't block on remote failures
+  }
+}
+
 export default function FeedbackWidget({ currentTab }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState('feedback');
@@ -22,7 +86,9 @@ export default function FeedbackWidget({ currentTab }) {
     if (!message.trim()) return;
     setSubmitting(true);
     try {
-      await api.submitFeedback({ type, message: message.trim(), page: currentTab || '' });
+      const entry = await api.submitFeedback({ type, message: message.trim(), page: currentTab || '' });
+      // Fire-and-forget: also send to central Cortex server if configured
+      sendRemoteFeedback(entry);
       toast.success("Thanks for your feedback!");
       setMessage('');
       setType('feedback');
@@ -133,6 +199,11 @@ export default function FeedbackWidget({ currentTab }) {
                 Context: <span style={{ color: C.muted }}>{currentTab}</span> tab
               </div>
             )}
+
+            {/* Remote collection info */}
+            <div style={{ fontSize: 11, color: C.faint, background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: 6 }}>
+              Feedback is saved locally and sent to the development team when connected.
+            </div>
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

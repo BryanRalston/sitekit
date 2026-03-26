@@ -26,7 +26,8 @@ router.get('/api/jobs/:jobId/receipts', (req, res) => {
 
     const enriched = receipts.map(r => ({
       ...r,
-      items: JSON.parse(r.items || '[]')
+      items: JSON.parse(r.items || '[]'),
+      hasPhoto: !!r.photo_path
     }));
 
     res.json(enriched);
@@ -70,7 +71,8 @@ router.post('/api/jobs/:jobId/receipts', (req, res) => {
     const receipt = getOne('SELECT * FROM receipts WHERE id = ?', [id]);
     res.status(201).json({
       ...receipt,
-      items: JSON.parse(receipt.items || '[]')
+      items: JSON.parse(receipt.items || '[]'),
+      hasPhoto: false
     });
   } catch (err) {
     console.error('POST /api/jobs/:jobId/receipts error:', err);
@@ -102,7 +104,8 @@ router.get('/api/receipts/:id', (req, res) => {
 
     res.json({
       ...receipt,
-      items: JSON.parse(receipt.items || '[]')
+      items: JSON.parse(receipt.items || '[]'),
+      hasPhoto: !!receipt.photo_path
     });
   } catch (err) {
     console.error('GET /api/receipts/:id error:', err);
@@ -140,7 +143,8 @@ router.put('/api/receipts/:id', (req, res) => {
     const receipt = getOne('SELECT * FROM receipts WHERE id = ?', [req.params.id]);
     res.json({
       ...receipt,
-      items: JSON.parse(receipt.items || '[]')
+      items: JSON.parse(receipt.items || '[]'),
+      hasPhoto: !!receipt.photo_path
     });
   } catch (err) {
     console.error('PUT /api/receipts/:id error:', err);
@@ -184,7 +188,8 @@ router.patch('/api/receipts/:id/toggle-submitted', (req, res) => {
     const receipt = getOne('SELECT * FROM receipts WHERE id = ?', [req.params.id]);
     res.json({
       ...receipt,
-      items: JSON.parse(receipt.items || '[]')
+      items: JSON.parse(receipt.items || '[]'),
+      hasPhoto: !!receipt.photo_path
     });
   } catch (err) {
     console.error('PATCH /api/receipts/:id/toggle-submitted error:', err);
@@ -209,7 +214,8 @@ router.post('/api/jobs/:jobId/receipts/mark-all-submitted', (req, res) => {
 
     res.json(receipts.map(r => ({
       ...r,
-      items: JSON.parse(r.items || '[]')
+      items: JSON.parse(r.items || '[]'),
+      hasPhoto: !!r.photo_path
     })));
   } catch (err) {
     console.error('POST /api/jobs/:jobId/receipts/mark-all-submitted error:', err);
@@ -254,7 +260,8 @@ router.post('/api/receipts/:id/photo', upload.single('photo'), async (req, res) 
     const updated = getOne('SELECT * FROM receipts WHERE id = ?', [req.params.id]);
     res.json({
       ...updated,
-      items: JSON.parse(updated.items || '[]')
+      items: JSON.parse(updated.items || '[]'),
+      hasPhoto: true
     });
   } catch (err) {
     console.error('POST /api/receipts/:id/photo error:', err);
@@ -270,7 +277,9 @@ router.get('/api/receipts/:id/photo', (req, res) => {
       return res.status(404).json({ error: 'Receipt photo not found' });
     }
 
-    const filePath = path.join(RECEIPT_PHOTOS_DIR, receipt.photo_path);
+    // Sanitize photo_path to prevent path traversal
+    const safeName = path.basename(receipt.photo_path);
+    const filePath = path.join(RECEIPT_PHOTOS_DIR, safeName);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'Photo file not found on disk' });
     }
@@ -356,7 +365,8 @@ router.get('/api/gas-log', (req, res) => {
 
     const enriched = gasReceipts.map(r => ({
       ...r,
-      items: JSON.parse(r.items || '[]')
+      items: JSON.parse(r.items || '[]'),
+      hasPhoto: !!r.photo_path
     }));
 
     res.json(enriched);

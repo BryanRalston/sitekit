@@ -106,7 +106,7 @@ export default function ImportModal({ jobId, onImport, onClose }) {
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
+    const file = e.dataTransfer?.files?.[0];
     if (file) handleFileUpload(file);
   }, [jobId]);
 

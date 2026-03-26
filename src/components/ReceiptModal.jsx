@@ -48,7 +48,9 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
   // If editing receipt with photo, show existing photo
   useEffect(() => {
     if (receipt?.hasPhoto) {
-      setPhotoPreview(api.getReceiptPhotoUrl(receipt.id));
+      api.getReceiptPhotoUrl(receipt.id).then(url => {
+        if (url) setPhotoPreview(url);
+      });
     }
   }, [receipt]);
 
@@ -182,8 +184,11 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
         amount: parseFloat(f.amount),
         date: f.date,
         category: f.category,
+        isGas: f.isGas,
         notes: f.notes.trim(),
+        items: receipt?.items || [],
         submitted: f.submitted,
+        hasPhoto: !!(photoFile || photoPreview),
       };
 
       let savedReceipt;
@@ -214,103 +219,6 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
   return (
     <Modal title={isEditing ? 'Edit Receipt' : 'New Receipt'} onClose={onClose} width={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-        {/* Store with autocomplete */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
-            Store *
-          </label>
-          <input
-            type="text"
-            list="store-names"
-            value={f.store}
-            onChange={e => { set('store')(e.target.value); setTouched(p => ({ ...p, store: true })); }}
-            placeholder="Home Depot, Lowe's..."
-            style={{
-              width: '100%', background: C.bg, border: receiptErrBorder('store'), borderRadius: 6,
-              color: C.text, padding: '8px 12px', fontSize: 13, outline: 'none', minHeight: 44,
-              boxSizing: 'border-box',
-            }}
-            onFocus={e => { if (!receiptErrors.store) e.target.style.borderColor = C.accent; }}
-            onBlur={e => { setTouched(p => ({ ...p, store: true })); if (!receiptErrors.store) e.target.style.borderColor = C.border; }}
-          />
-          <datalist id="store-names">
-            {storeNames.map(name => <option key={name} value={name} />)}
-          </datalist>
-          {receiptFieldError('store')}
-        </div>
-
-        {/* Amount + Date row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
-              Amount *
-            </label>
-            <div style={{ position: 'relative' }}>
-              <span style={{
-                position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-                ...MF, fontSize: 18, fontWeight: 700, color: C.muted, pointerEvents: 'none',
-              }}>$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={f.amount}
-                onChange={e => { set('amount')(e.target.value); setTouched(p => ({ ...p, amount: true })); }}
-                placeholder="0.00"
-                style={{
-                  width: '100%', background: C.bg, border: receiptErrBorder('amount'), borderRadius: 6,
-                  color: C.text, padding: '8px 12px 8px 28px', fontSize: 18, fontWeight: 700,
-                  outline: 'none', minHeight: 44, boxSizing: 'border-box',
-                  ...MF,
-                }}
-                onFocus={e => { if (!receiptErrors.amount) e.target.style.borderColor = C.accent; }}
-                onBlur={e => { setTouched(p => ({ ...p, amount: true })); if (!receiptErrors.amount) e.target.style.borderColor = C.border; }}
-                autoFocus
-              />
-            </div>
-            {receiptFieldError('amount')}
-          </div>
-          <div>
-            <Inp label="Date *" type="date" value={f.date} onChange={v => { set('date')(v); setTouched(p => ({ ...p, date: true })); }} />
-            {receiptFieldError('date')}
-          </div>
-        </div>
-
-        {/* Category buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
-            Category
-          </label>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {CATEGORY_LIST.map(cat => {
-              const isActive = f.category === cat;
-              const catStyle = CATEGORIES[cat];
-              return (
-                <button
-                  key={cat}
-                  onClick={() => set('category')(cat)}
-                  style={{
-                    padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: 'inherit', minHeight: 36,
-                    background: isActive ? catStyle.bg : 'transparent',
-                    color: isActive ? catStyle.color : C.muted,
-                    border: `1px solid ${isActive ? catStyle.border : C.border}`,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Gas toggle */}
-        <Toggle checked={f.isGas} onChange={set('isGas')} label="Gas purchase" right />
-
-        {/* Notes */}
-        <Inp label="Notes" value={f.notes} onChange={set('notes')} multiline rows={2} placeholder="Optional notes..." />
 
         {/* Photo section */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -379,6 +287,102 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
             </div>
           )}
         </div>
+
+        {/* Store with autocomplete */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
+            Store *
+          </label>
+          <input
+            type="text"
+            list="store-names"
+            value={f.store}
+            onChange={e => { set('store')(e.target.value); setTouched(p => ({ ...p, store: true })); }}
+            placeholder="Home Depot, Lowe's..."
+            style={{
+              width: '100%', background: C.bg, border: receiptErrBorder('store'), borderRadius: 6,
+              color: C.text, padding: '8px 12px', fontSize: 13, outline: 'none', minHeight: 44,
+              boxSizing: 'border-box',
+            }}
+            onFocus={e => { if (!receiptErrors.store) e.target.style.borderColor = C.accent; }}
+            onBlur={e => { setTouched(p => ({ ...p, store: true })); if (!receiptErrors.store) e.target.style.borderColor = C.border; }}
+          />
+          <datalist id="store-names">
+            {storeNames.map(name => <option key={name} value={name} />)}
+          </datalist>
+          {receiptFieldError('store')}
+        </div>
+
+        {/* Amount + Date row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
+              Amount *
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+                ...MF, fontSize: 18, fontWeight: 700, color: C.muted, pointerEvents: 'none',
+              }}>$</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={f.amount}
+                onChange={e => { set('amount')(e.target.value); setTouched(p => ({ ...p, amount: true })); }}
+                placeholder="0.00"
+                style={{
+                  width: '100%', background: C.bg, border: receiptErrBorder('amount'), borderRadius: 6,
+                  color: C.text, padding: '8px 12px 8px 28px', fontSize: 18, fontWeight: 700,
+                  outline: 'none', minHeight: 44, boxSizing: 'border-box',
+                  ...MF,
+                }}
+                onFocus={e => { if (!receiptErrors.amount) e.target.style.borderColor = C.accent; }}
+                onBlur={e => { setTouched(p => ({ ...p, amount: true })); if (!receiptErrors.amount) e.target.style.borderColor = C.border; }}
+              />
+            </div>
+            {receiptFieldError('amount')}
+          </div>
+          <div>
+            <Inp label="Date *" type="date" value={f.date} onChange={v => { set('date')(v); setTouched(p => ({ ...p, date: true })); }} />
+            {receiptFieldError('date')}
+          </div>
+        </div>
+
+        {/* Category buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.09em', textTransform: 'uppercase' }}>
+            Category
+          </label>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {CATEGORY_LIST.map(cat => {
+              const isActive = f.category === cat;
+              const catStyle = CATEGORIES[cat];
+              return (
+                <button
+                  key={cat}
+                  onClick={() => set('category')(cat)}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', fontFamily: 'inherit', minHeight: 36,
+                    background: isActive ? catStyle.bg : 'transparent',
+                    color: isActive ? catStyle.color : C.muted,
+                    border: `1px solid ${isActive ? catStyle.border : C.border}`,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Gas toggle */}
+        <Toggle checked={f.isGas} onChange={set('isGas')} label="Gas purchase" right />
+
+        {/* Notes */}
+        <Inp label="Notes" value={f.notes} onChange={set('notes')} multiline rows={2} placeholder="Optional notes..." />
 
         {/* Items section (OCR parsed, read-only) */}
         {items.length > 0 && (

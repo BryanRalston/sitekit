@@ -21,6 +21,13 @@ async function hashPin(pin) {
   return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Legacy SHA-256 hash — used before PBKDF2 migration, kept for backward compat
+async function hashPinLegacy(pin) {
+  const data = new TextEncoder().encode(pin);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function today() { return new Date().toISOString().slice(0, 10); }
 
 /**
@@ -401,6 +408,7 @@ export const api = {
       date: data.date || today(), category: sanitize(data.category) || 'Materials',
       notes: sanitize(data.notes) || '', isGas: data.isGas || false,
       items: data.items || [], submitted: data.submitted || false,
+      hasPhoto: false,
       createdAt: new Date().toISOString(),
     };
     await put('receipts', receipt);
@@ -449,6 +457,11 @@ export const api = {
     const file = formData.get('photo');
     const compressed = await compressReceiptImage(file);
     await put('receipt_blobs', { id, data: compressed });
+    // Update receipt to track photo existence
+    const receipt = await getOne('receipts', id);
+    if (receipt) {
+      await put('receipts', { ...receipt, hasPhoto: true });
+    }
     return { success: true };
   },
 
@@ -511,6 +524,7 @@ export const api = {
         date: rlReceipt.date || '', category: rlReceipt.category || 'Materials',
         notes: rlReceipt.notes || '', isGas: rlReceipt.isGas || false,
         items: rlReceipt.items || [], submitted: rlReceipt.submitted || false,
+        hasPhoto: !!rlReceipt.photo,
         createdAt: new Date().toISOString(),
       });
       receiptsImported++;
@@ -812,14 +826,31 @@ export const api = {
     async verify(pin) {
       const config = await getOne('config', 'pin_hash');
       if (!config) return { valid: false };
+      // Try PBKDF2 first (current method)
       const hash = await hashPin(pin);
-      return { valid: hash === config.value };
+      if (hash === config.value) return { valid: true };
+      // Fallback: try legacy SHA-256 hash (pre-migration PINs)
+      const legacyHash = await hashPinLegacy(pin);
+      if (legacyHash === config.value) {
+        // Silently migrate to PBKDF2 on successful legacy login
+        await put('config', { key: 'pin_hash', value: hash });
+        return { valid: true };
+      }
+      return { valid: false };
     },
     async change(currentPin, newPin) {
       const config = await getOne('config', 'pin_hash');
       if (!config) throw new Error('No PIN configured');
+      // Try PBKDF2 first
       const currentHash = await hashPin(currentPin);
-      if (currentHash !== config.value) return { valid: false };
+      let matched = currentHash === config.value;
+      // Fallback: try legacy SHA-256 hash
+      if (!matched) {
+        const legacyHash = await hashPinLegacy(currentPin);
+        matched = legacyHash === config.value;
+      }
+      if (!matched) return { valid: false };
+      // Always store new PIN with PBKDF2
       const newHash = await hashPin(newPin);
       await put('config', { key: 'pin_hash', value: newHash });
       return { valid: true, success: true };
