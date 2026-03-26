@@ -50,6 +50,7 @@ export default function ReceiptLogImport({ onClose, onImport }) {
 
   const handleFileInput = (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (file) handleFile(file);
   };
 
@@ -128,7 +129,7 @@ export default function ReceiptLogImport({ onClose, onImport }) {
             <input
               ref={fileRef}
               type="file"
-              accept=".json"
+              accept=".json,application/json,*/*"
               onChange={handleFileInput}
               style={{ display: 'none' }}
             />
