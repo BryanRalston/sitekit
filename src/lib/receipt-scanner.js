@@ -594,7 +594,8 @@ export async function scanReceipt(imageDataUrl, onStage) {
   } catch (err) {
     t('ERROR: ' + (err?.message || String(err)));
     onStage?.('error');
-    err.scanLog = log;
-    throw err;
+    const wrapped = new Error(err?.message || String(err));
+    wrapped.scanLog = log;
+    throw wrapped;
   }
 }
