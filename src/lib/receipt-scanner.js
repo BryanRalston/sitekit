@@ -615,17 +615,19 @@ export async function scanReceipt(imageDataUrl, onStage) {
   const t = (msg) => { const entry = `[${((performance.now()/1000)).toFixed(1)}s] ${msg}`; log.push(entry); console.log('[ScanReceipt]', entry); };
 
   try {
-    // Stage 1: Rotate if landscape, then resize
+    // Stage 1: Rotate if landscape, enhance, then resize
     t('Starting preprocessing');
     onStage?.('enhancing');
     let processed = imageDataUrl;
     try {
       processed = await withTimeout(rotateIfLandscape(processed), 5000, 'Rotation check');
-      t('Rotation check done');
-      processed = await withTimeout(resizeForOCR(processed, 1200), 8000, 'Image resize');
-      t('Resize done');
+      t('Rotation done');
+      processed = await withTimeout(enhanceImage(processed), 15000, 'Image enhancement');
+      t('Enhancement done');
     } catch (prepErr) {
-      t('Preprocessing failed, using original: ' + prepErr?.message);
+      t('Enhancement failed, using original: ' + prepErr?.message);
+      // Still try rotation even if enhancement fails
+      try { processed = await rotateIfLandscape(imageDataUrl); } catch {}
     }
 
     // Stage 2: OCR — uses same approach as ReceiptLog (proven on mobile)
