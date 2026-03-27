@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { C, TF, MF, STATUS, getItemStatus } from '../tokens';
 import { Btn, Toggle } from './ui';
 import { useMobile } from '../hooks/useApi';
@@ -28,6 +28,53 @@ export default function FixturesTab({ job, onRefresh }) {
   const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week"
   const [issuesFilter, setIssuesFilter] = useState(false); // show only unreported issues
   const isMobile = useMobile();
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const [sectionNicknames, setSectionNicknames] = useState({});
+  const [editingNickname, setEditingNickname] = useState(null); // group name being edited
+  const [nicknameInput, setNicknameInput] = useState("");
+
+  // Load section nicknames from localStorage on mount / job change
+  useEffect(() => {
+    if (!job?.id) return;
+    try {
+      const stored = localStorage.getItem(`sitekit_section_nicknames_${job.id}`);
+      if (stored) setSectionNicknames(JSON.parse(stored));
+      else setSectionNicknames({});
+    } catch { setSectionNicknames({}); }
+  }, [job?.id]);
+
+  // Save nicknames to localStorage whenever they change
+  const saveNickname = useCallback((original, nickname) => {
+    setSectionNicknames(prev => {
+      const next = { ...prev };
+      if (nickname && nickname.trim()) {
+        next[original] = nickname.trim();
+      } else {
+        delete next[original];
+      }
+      if (job?.id) {
+        try { localStorage.setItem(`sitekit_section_nicknames_${job.id}`, JSON.stringify(next)); } catch {}
+      }
+      return next;
+    });
+    setEditingNickname(null);
+    setNicknameInput("");
+  }, [job?.id]);
+
+  const toggleGroupCollapse = useCallback((groupName) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupName)) next.delete(groupName);
+      else next.add(groupName);
+      return next;
+    });
+  }, []);
+
+  // Get display name for a group (nickname or original)
+  const getGroupDisplayName = useCallback((groupName) => {
+    const nickname = sectionNicknames[groupName];
+    return nickname || groupName;
+  }, [sectionNicknames]);
 
   const items = job.items || [];
 
@@ -202,13 +249,17 @@ export default function FixturesTab({ job, onRefresh }) {
   // Filter items
   const filteredItems = items.filter(item => {
     const ql = search.toLowerCase();
+    const vendorNick = sectionNicknames[item.vendor || ""] || "";
+    const sectionNick = sectionNicknames[item.section || ""] || "";
     const m = !ql
       || (item.description || "").toLowerCase().includes(ql)
       || (item.itemNumber || "").toLowerCase().includes(ql)
       || (item.vendor || "").toLowerCase().includes(ql)
       || (item.section || "").toLowerCase().includes(ql)
       || (item.fixtureBook || "").toLowerCase().includes(ql)
-      || (item.materialClass || "").toLowerCase().includes(ql);
+      || (item.materialClass || "").toLowerCase().includes(ql)
+      || vendorNick.toLowerCase().includes(ql)
+      || sectionNick.toLowerCase().includes(ql);
     const st = filterStatus === "all" || getItemStatus(item) === filterStatus;
 
     // Delivery filter
@@ -588,17 +639,20 @@ export default function FixturesTab({ job, onRefresh }) {
           }}>
             All
           </button>
-          {allSections.map(sec => (
-            <button key={sec} onClick={() => setSearch(sec === search ? "" : sec)} style={{
-              fontSize: 10, padding: "2px 8px", borderRadius: 4, cursor: "pointer",
-              fontFamily: "inherit", minHeight: 28,
-              background: search === sec ? C.tealDim : "transparent",
-              color: search === sec ? C.teal : C.faint,
-              border: `1px solid ${search === sec ? C.tealBorder : "transparent"}`
-            }}>
-              {sec}
-            </button>
-          ))}
+          {allSections.map(sec => {
+            const displayName = getGroupDisplayName(sec);
+            return (
+              <button key={sec} onClick={() => setSearch(sec === search ? "" : sec)} style={{
+                fontSize: 10, padding: "2px 8px", borderRadius: 4, cursor: "pointer",
+                fontFamily: "inherit", minHeight: 28,
+                background: search === sec ? C.tealDim : "transparent",
+                color: search === sec ? C.teal : C.faint,
+                border: `1px solid ${search === sec ? C.tealBorder : "transparent"}`
+              }}>
+                {displayName}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -641,8 +695,10 @@ export default function FixturesTab({ job, onRefresh }) {
             const flat = [];
             for (const [grp, gitems] of Object.entries(grouped)) {
               flat.push({ _type: 'header', _group: grp, _count: gitems.length });
-              for (let idx = 0; idx < gitems.length; idx++) {
-                flat.push({ _type: 'item', _itemIdx: idx, ...gitems[idx] });
+              if (!collapsedGroups.has(grp)) {
+                for (let idx = 0; idx < gitems.length; idx++) {
+                  flat.push({ _type: 'item', _itemIdx: idx, ...gitems[idx] });
+                }
               }
             }
             return flat;
@@ -652,6 +708,9 @@ export default function FixturesTab({ job, onRefresh }) {
           containerStyle={{ flex: 1 }}
           renderItem={(entry, i) => {
             if (entry._type === 'header') {
+              const isCollapsed = collapsedGroups.has(entry._group);
+              const nickname = sectionNicknames[entry._group];
+              const displayName = nickname || entry._group;
               return (
                 <div key={`hdr-${entry._group}`} style={{
                   padding: "5px 14px",
@@ -662,12 +721,45 @@ export default function FixturesTab({ job, onRefresh }) {
                   color: groupBy === "section" ? C.teal : C.accent,
                   textTransform: "uppercase", letterSpacing: "0.07em",
                   display: "flex", gap: 8, alignItems: "center",
-                  height: isMobile ? 100 : 44, boxSizing: "border-box"
-                }}>
-                  {groupBy === "section" ? "📂" : "🏭"} {entry._group}
+                  height: isMobile ? 100 : 44, boxSizing: "border-box",
+                  cursor: "pointer", userSelect: "none"
+                }}
+                  onClick={() => toggleGroupCollapse(entry._group)}
+                >
+                  <span style={{ fontSize: 8, transition: "transform 0.15s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▼</span>
+                  {groupBy === "section" ? "📂" : "🏭"} {displayName}
+                  {nickname && (
+                    <span style={{ color: C.faint, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 8 }}>
+                      ({entry._group})
+                    </span>
+                  )}
                   <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
                     ({entry._count})
                   </span>
+                  {editingNickname === entry._group ? (
+                    <span onClick={e => e.stopPropagation()} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                      <input
+                        autoFocus
+                        value={nicknameInput}
+                        onChange={e => setNicknameInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") saveNickname(entry._group, nicknameInput); if (e.key === "Escape") { setEditingNickname(null); setNicknameInput(""); } }}
+                        placeholder="Nickname..."
+                        style={{
+                          width: 120, padding: "2px 6px", fontSize: 10, borderRadius: 4,
+                          border: `1px solid ${C.border}`, background: C.bg, color: C.text,
+                          fontFamily: "inherit", outline: "none"
+                        }}
+                      />
+                      <button onClick={() => saveNickname(entry._group, nicknameInput)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: C.green, fontFamily: "inherit" }}>✓</button>
+                      <button onClick={() => { setEditingNickname(null); setNicknameInput(""); }} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: C.red, fontFamily: "inherit" }}>✕</button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditingNickname(entry._group); setNicknameInput(sectionNicknames[entry._group] || ""); }}
+                      title="Set nickname"
+                      style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: C.faint, padding: "0 2px", opacity: 0.6 }}
+                    >✏️</button>
+                  )}
                 </div>
               );
             }
@@ -697,48 +789,87 @@ export default function FixturesTab({ job, onRefresh }) {
       ) : (
         /* ── Standard rendering for small lists ── */
         <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
-          {Object.entries(grouped).map(([grp, gitems]) => (
-            <div key={grp}>
-              <div style={{
-                padding: "5px 14px",
-                background: groupBy === "section" ? C.tealDim : C.accentDim,
-                borderBottom: `1px solid ${groupBy === "section" ? C.tealBorder : C.accentBorder}`,
-                borderTop: `1px solid ${groupBy === "section" ? C.tealBorder : C.accentBorder}`,
-                fontSize: 9, fontWeight: 700,
-                color: groupBy === "section" ? C.teal : C.accent,
-                textTransform: "uppercase", letterSpacing: "0.07em",
-                display: "flex", gap: 8, alignItems: "center"
-              }}>
-                {groupBy === "section" ? "📂" : "🏭"} {grp}
-                <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
-                  ({gitems.length})
-                </span>
-              </div>
-              {gitems.map((item, itemIdx) => (
-                <React.Fragment key={item.id}>
-                  <div data-tutorial={itemIdx === 0 ? "item-row" : undefined}>
-                    <ItemRow
-                      item={item}
-                      onEdit={handleItemClick}
-                      onQuickReceive={() => setQuickReceiveId(quickReceiveId === item.id ? null : item.id)}
-                      showQtyCol={showQtyCol}
-                      groupBy={groupBy}
-                      bulkMode={bulkMode}
-                      isSelected={selectedIds.has(item.id)}
-                      onToggleSelect={toggleSelect}
-                    />
-                  </div>
-                  {quickReceiveId === item.id && !bulkMode && (
-                    <QuickReceive
-                      item={item}
-                      onSave={(data) => handleQuickReceive(item.id, data)}
-                      onCancel={() => setQuickReceiveId(null)}
-                    />
+          {Object.entries(grouped).map(([grp, gitems]) => {
+            const isCollapsed = collapsedGroups.has(grp);
+            const nickname = sectionNicknames[grp];
+            const displayName = nickname || grp;
+            return (
+              <div key={grp}>
+                <div
+                  onClick={() => toggleGroupCollapse(grp)}
+                  style={{
+                    padding: "5px 14px",
+                    background: groupBy === "section" ? C.tealDim : C.accentDim,
+                    borderBottom: `1px solid ${groupBy === "section" ? C.tealBorder : C.accentBorder}`,
+                    borderTop: `1px solid ${groupBy === "section" ? C.tealBorder : C.accentBorder}`,
+                    fontSize: 9, fontWeight: 700,
+                    color: groupBy === "section" ? C.teal : C.accent,
+                    textTransform: "uppercase", letterSpacing: "0.07em",
+                    display: "flex", gap: 8, alignItems: "center",
+                    cursor: "pointer", userSelect: "none"
+                  }}
+                >
+                  <span style={{ fontSize: 8, transition: "transform 0.15s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▼</span>
+                  {groupBy === "section" ? "📂" : "🏭"} {displayName}
+                  {nickname && (
+                    <span style={{ color: C.faint, fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 8 }}>
+                      ({grp})
+                    </span>
                   )}
-                </React.Fragment>
-              ))}
-            </div>
-          ))}
+                  <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                    ({gitems.length})
+                  </span>
+                  {editingNickname === grp ? (
+                    <span onClick={e => e.stopPropagation()} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                      <input
+                        autoFocus
+                        value={nicknameInput}
+                        onChange={e => setNicknameInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") saveNickname(grp, nicknameInput); if (e.key === "Escape") { setEditingNickname(null); setNicknameInput(""); } }}
+                        placeholder="Nickname..."
+                        style={{
+                          width: 120, padding: "2px 6px", fontSize: 10, borderRadius: 4,
+                          border: `1px solid ${C.border}`, background: C.bg, color: C.text,
+                          fontFamily: "inherit", outline: "none"
+                        }}
+                      />
+                      <button onClick={() => saveNickname(grp, nicknameInput)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: C.green, fontFamily: "inherit" }}>✓</button>
+                      <button onClick={() => { setEditingNickname(null); setNicknameInput(""); }} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: C.red, fontFamily: "inherit" }}>✕</button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={e => { e.stopPropagation(); setEditingNickname(grp); setNicknameInput(sectionNicknames[grp] || ""); }}
+                      title="Set nickname"
+                      style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: C.faint, padding: "0 2px", opacity: 0.6 }}
+                    >✏️</button>
+                  )}
+                </div>
+                {!isCollapsed && gitems.map((item, itemIdx) => (
+                  <React.Fragment key={item.id}>
+                    <div data-tutorial={itemIdx === 0 ? "item-row" : undefined}>
+                      <ItemRow
+                        item={item}
+                        onEdit={handleItemClick}
+                        onQuickReceive={() => setQuickReceiveId(quickReceiveId === item.id ? null : item.id)}
+                        showQtyCol={showQtyCol}
+                        groupBy={groupBy}
+                        bulkMode={bulkMode}
+                        isSelected={selectedIds.has(item.id)}
+                        onToggleSelect={toggleSelect}
+                      />
+                    </div>
+                    {quickReceiveId === item.id && !bulkMode && (
+                      <QuickReceive
+                        item={item}
+                        onSave={(data) => handleQuickReceive(item.id, data)}
+                        onCancel={() => setQuickReceiveId(null)}
+                      />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
 
