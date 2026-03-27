@@ -558,6 +558,28 @@ export function scoreConfidence(parsed) {
 // Runs the complete scan pipeline with stage callbacks for UI feedback.
 // onStage('enhancing' | 'scanning' | 'parsing' | 'done' | 'error')
 
+// Rotate landscape images to portrait — receipts are always taller than wide
+function rotateIfLandscape(dataURL) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onerror = () => resolve(dataURL);
+    img.onload = () => {
+      if (img.height >= img.width) { resolve(dataURL); return; }
+      // Landscape — rotate 90 degrees clockwise
+      const canvas = document.createElement('canvas');
+      canvas.width = img.height;
+      canvas.height = img.width;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(dataURL); return; }
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = dataURL;
+  });
+}
+
 // Simple resize — no enhancement, just downscale for mobile OCR
 function resizeForOCR(dataURL, maxWidth) {
   return new Promise((resolve, reject) => {
@@ -593,15 +615,17 @@ export async function scanReceipt(imageDataUrl, onStage) {
   const t = (msg) => { const entry = `[${((performance.now()/1000)).toFixed(1)}s] ${msg}`; log.push(entry); console.log('[ScanReceipt]', entry); };
 
   try {
-    // Stage 1: Resize for mobile (skip heavy enhancement — causes OOM on phones)
-    t('Starting resize');
+    // Stage 1: Rotate if landscape, then resize
+    t('Starting preprocessing');
     onStage?.('enhancing');
     let processed = imageDataUrl;
     try {
-      processed = await withTimeout(resizeForOCR(imageDataUrl, 1200), 8000, 'Image resize');
+      processed = await withTimeout(rotateIfLandscape(processed), 5000, 'Rotation check');
+      t('Rotation check done');
+      processed = await withTimeout(resizeForOCR(processed, 1200), 8000, 'Image resize');
       t('Resize done');
-    } catch (resizeErr) {
-      t('Resize failed, using original: ' + resizeErr?.message);
+    } catch (prepErr) {
+      t('Preprocessing failed, using original: ' + prepErr?.message);
     }
 
     // Stage 2: OCR — uses same approach as ReceiptLog (proven on mobile)
