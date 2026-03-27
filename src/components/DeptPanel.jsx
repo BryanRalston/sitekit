@@ -10,7 +10,8 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(dept.name);
   const { toast, confirm: toastConfirm } = useToast();
-  const addPhotoRef = useRef(null);
+  const addCameraRef = useRef(null);
+  const addGalleryRef = useRef(null);
 
   const photos = dept.photos || [];
   const done = photos.filter(p => p.completed).length;
@@ -39,9 +40,8 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
     }
   };
 
-  const addPhoto = () => {
-    addPhotoRef.current?.click();
-  };
+  const addPhotoCamera = () => addCameraRef.current?.click();
+  const addPhotoGallery = () => addGalleryRef.current?.click();
 
   const handleAddPhotoFile = async (e) => {
     const file = e.target.files?.[0];
@@ -152,18 +152,19 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
                 onDelete={() => deletePhoto(photo)}
               />
             ))}
-            <input type="file" accept="image/*" ref={addPhotoRef} style={{ display: 'none' }}
+            <input type="file" accept="image/*" capture="environment" ref={addCameraRef} style={{ display: 'none' }}
               onChange={handleAddPhotoFile} />
-            <div onClick={addPhoto} style={{
+            <input type="file" accept="image/*" ref={addGalleryRef} style={{ display: 'none' }}
+              onChange={handleAddPhotoFile} />
+            <div style={{
               minHeight: 195, border: `2px dashed ${C.border}`, borderRadius: 10,
               display: "flex", flexDirection: "column", alignItems: "center",
-              justifyContent: "center", gap: 8, cursor: "pointer", color: C.faint,
+              justifyContent: "center", gap: 8, color: C.faint,
               transition: "all 0.15s"
-            }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.color = color; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.faint; }}>
-              <span style={{ fontSize: 28 }}>+</span>
-              <span style={{ fontSize: 12, fontWeight: 600 }}>Add Photo</span>
+            }}>
+              <span style={{ fontSize: 22, marginBottom: 4 }}>+</span>
+              <Btn variant="ghost" size="sm" icon="📷" onClick={addPhotoCamera} style={{ minWidth: 130 }}>Take Photo</Btn>
+              <Btn variant="ghost" size="sm" icon="🖼️" onClick={addPhotoGallery} style={{ minWidth: 130 }}>Choose Photo</Btn>
             </div>
           </div>
         </div>
