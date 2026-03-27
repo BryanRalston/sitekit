@@ -580,32 +580,31 @@ export async function scanReceipt(imageDataUrl, onStage) {
       t('Resize failed, using original: ' + resizeErr?.message);
     }
 
-    // Stage 2: OCR
+    // Stage 2: OCR — uses same approach as ReceiptLog (proven on mobile)
     t('Starting OCR');
     onStage?.('scanning');
-    // Wait for Tesseract (preloaded via script tag in index.html)
-    if (!window.Tesseract) {
-      // Fallback: wait up to 10s for the deferred script to load
-      let attempts = 0;
-      while (!window.Tesseract && attempts < 100) {
-        await new Promise(r => setTimeout(r, 100));
-        attempts++;
-      }
-      if (!window.Tesseract) {
-        throw new Error('Tesseract.js not available — check your internet connection');
-      }
-    }
 
-    t('Tesseract available: ' + !!window.Tesseract);
-    const worker = await window.Tesseract.createWorker('eng', 1, {
-      workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
-      corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
-    });
-    t('Worker created');
-    const ocrResult = await withTimeout(worker.recognize(processed), 45000, 'OCR recognition');
-    t('OCR done, text length: ' + (ocrResult?.data?.text?.length || 0));
-    await worker.terminate();
-    const rawText = ocrResult.data.text;
+    let rawText = '';
+    try {
+      // Exact same pattern as ReceiptLog's OCR module
+      const T = window.Tesseract || (typeof Tesseract !== 'undefined' ? Tesseract : null);
+      if (!T || !T.createWorker) {
+        throw new Error('Tesseract.js not loaded — check internet connection');
+      }
+      t('Tesseract found, creating worker');
+      const worker = await T.createWorker('eng', 1, {
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
+      });
+      t('Worker created, recognizing');
+      const { data } = await worker.recognize(processed);
+      rawText = data.text || '';
+      t('OCR done, text length: ' + rawText.length);
+      await worker.terminate();
+    } catch (ocrErr) {
+      t('OCR failed: ' + (ocrErr?.message || String(ocrErr)));
+      throw new Error('OCR failed: ' + (ocrErr?.message || 'unknown error'));
+    }
 
     // Stage 3: Parse
     t('Parsing');
