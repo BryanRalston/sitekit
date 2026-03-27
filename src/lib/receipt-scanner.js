@@ -543,13 +543,20 @@ function withTimeout(promise, ms, label) {
 }
 
 export async function scanReceipt(imageDataUrl, onStage) {
+  const log = [];
+  const t = (msg) => { const entry = `[${((performance.now()/1000)).toFixed(1)}s] ${msg}`; log.push(entry); console.log('[ScanReceipt]', entry); };
+
   try {
     // Stage 1: Enhance (10s timeout)
+    t('Starting enhancement');
     onStage?.('enhancing');
     const enhanced = await withTimeout(enhanceImage(imageDataUrl), 10000, 'Image enhancement');
+    t('Enhancement done');
     const trimmed = await withTimeout(trimToContent(enhanced), 5000, 'Image trim');
+    t('Trim done');
 
     // Stage 2: OCR
+    t('Starting OCR');
     onStage?.('scanning');
     // Wait for Tesseract (preloaded via script tag in index.html)
     if (!window.Tesseract) {
@@ -564,23 +571,30 @@ export async function scanReceipt(imageDataUrl, onStage) {
       }
     }
 
+    t('Tesseract available: ' + !!window.Tesseract);
     const worker = await window.Tesseract.createWorker('eng', 1, {
       workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
       corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
     });
+    t('Worker created');
     const ocrResult = await withTimeout(worker.recognize(trimmed), 45000, 'OCR recognition');
+    t('OCR done, text length: ' + (ocrResult?.data?.text?.length || 0));
     await worker.terminate();
     const rawText = ocrResult.data.text;
 
     // Stage 3: Parse
+    t('Parsing');
     onStage?.('parsing');
     const parsed = parseReceipt(rawText);
     const confidence = scoreConfidence(parsed);
+    t('Parse done — amount: ' + (parsed.amount || 'none') + ', store: ' + (parsed.store || 'none'));
 
     onStage?.('done');
-    return { parsed, confidence, rawText, enhancedImage: trimmed };
+    return { parsed, confidence, rawText, enhancedImage: trimmed, log };
   } catch (err) {
+    t('ERROR: ' + (err?.message || String(err)));
     onStage?.('error');
+    err.scanLog = log;
     throw err;
   }
 }

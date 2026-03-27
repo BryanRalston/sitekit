@@ -107,10 +107,11 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
     setOcrResult(null);
     setOcrStage(null);
     try {
-      const { parsed, confidence } = await scanReceipt(
+      const result = await scanReceipt(
         photoPreview,
         (stage) => setOcrStage(stage),
       );
+      const { parsed, confidence, rawText, log: scanLog } = result;
 
       const filled = [];
 
@@ -144,11 +145,15 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
         filled.push(`${parsed.items.length} items`);
       }
 
+      const diagSuccess = { rawText, store: parsed.store, amount: parsed.amount, date: parsed.date, items: parsed.items?.length, confidence, filled, scanLog, time: new Date().toISOString() };
+      try { localStorage.setItem('sitekit_scan_debug', JSON.stringify(diagSuccess)); } catch {}
       setOcrResult({ parsed, confidence, filled });
     } catch (err) {
       console.error('Receipt scan failed:', err);
       setOcrStage('error');
-      setOcrResult({ error: err.message, filled: [] });
+      const diagError = { error: err?.message, stack: err?.stack, scanLog: err?.scanLog, time: new Date().toISOString() };
+      try { localStorage.setItem('sitekit_scan_debug', JSON.stringify(diagError)); } catch {}
+      setOcrResult({ error: (err?.message || String(err)), filled: [] });
     } finally {
       setOcrLoading(false);
     }
