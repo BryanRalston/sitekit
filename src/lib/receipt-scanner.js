@@ -313,7 +313,7 @@ const KNOWN_STORES = [
   { re: /CHEVRON/i, name: 'Chevron', cat: 'Gas' },
   { re: /SPEEDWAY/i, name: 'Speedway', cat: 'Gas' },
   { re: /MARATHON/i, name: 'Marathon', cat: 'Gas' },
-  { re: /BP\b/i, name: 'BP', cat: 'Gas' },
+  { re: /\bBP\s+(GAS|STATION|FUEL|SHOP|AMOCO)/i, name: 'BP', cat: 'Gas' },
   { re: /WAWA/i, name: 'Wawa', cat: 'Gas' },
   { re: /QT\b|QUIK\s*TRIP/i, name: 'QuikTrip', cat: 'Gas' },
   { re: /CASEY'?S/i, name: "Casey's", cat: 'Gas' },

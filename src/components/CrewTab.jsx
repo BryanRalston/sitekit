@@ -295,6 +295,35 @@ export default function CrewTab({ job, onCrewChange }) {
     await loadResolutions();
   };
 
+  // ── Weekly hours summary card ────────────────────────────────────────────
+
+  const weekHoursSummary = useMemo(() => {
+    const available = crewMembers.reduce((sum, m) => sum + (m.dailyHours || 8) * 5, 0);
+    const logged = timeEntries.reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
+    const remaining = available - logged;
+    // Calculate pace: what percentage of the week is done (M-F)
+    const now = new Date();
+    const weekStartDate = new Date(weekStart + 'T00:00:00');
+    const dayOfWeek = Math.min(5, Math.max(0,
+      Math.floor((now - weekStartDate) / (1000 * 60 * 60 * 24))
+    ));
+    // If viewing a past week, treat as fully elapsed
+    const isCurrentWeek = weekOffset === 0;
+    const expectedPct = isCurrentWeek ? (dayOfWeek + 1) / 5 : 1;
+    const actualPct = available > 0 ? logged / available : 0;
+    const deficit = expectedPct - actualPct;
+    // green if on pace, yellow if behind, red if >20% deficit
+    let color = C.green;
+    let borderColor = C.greenBorder;
+    let bgColor = C.greenDim;
+    if (deficit > 0.20) {
+      color = C.red; borderColor = C.redBorder; bgColor = C.redDim;
+    } else if (deficit > 0) {
+      color = C.yellow; borderColor = C.yellowBorder; bgColor = C.yellowDim;
+    }
+    return { available, logged, remaining, color, borderColor, bgColor };
+  }, [crewMembers, timeEntries, weekStart, weekOffset]);
+
   // ── Summary view ──────────────────────────────────────────────────────────
 
   if (showSummary) {
@@ -409,6 +438,30 @@ export default function CrewTab({ job, onCrewChange }) {
       <>
         {WeekNav}
 
+        {/* Crew hours summary card */}
+        {crewMembers.length > 0 && (
+          <div style={{
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 14px', borderBottom: `1px solid ${C.border}`,
+            background: weekHoursSummary.bgColor,
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: weekHoursSummary.color, whiteSpace: 'nowrap' }}>
+              This Week:
+            </span>
+            <span style={{ ...MF, fontSize: 11, color: C.text, whiteSpace: 'nowrap' }}>
+              {fmtHours(weekHoursSummary.available)} avail
+            </span>
+            <span style={{ color: C.faint, fontSize: 11 }}>|</span>
+            <span style={{ ...MF, fontSize: 11, color: weekHoursSummary.color, fontWeight: 700, whiteSpace: 'nowrap' }}>
+              {fmtHours(weekHoursSummary.logged)} logged
+            </span>
+            <span style={{ color: C.faint, fontSize: 11 }}>|</span>
+            <span style={{ ...MF, fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>
+              {fmtHours(weekHoursSummary.remaining)} left
+            </span>
+          </div>
+        )}
+
         {/* Day selector strip */}
         <div style={{
           flexShrink: 0, display: 'flex', gap: 6,
@@ -519,6 +572,30 @@ export default function CrewTab({ job, onCrewChange }) {
   return (
     <>
       {WeekNav}
+
+      {/* Crew hours summary card */}
+      {crewMembers.length > 0 && (
+        <div style={{
+          flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
+          padding: '8px 18px', borderBottom: `1px solid ${C.border}`,
+          background: weekHoursSummary.bgColor,
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: weekHoursSummary.color }}>
+            This Week:
+          </span>
+          <span style={{ ...MF, fontSize: 12, color: C.text }}>
+            {fmtHours(weekHoursSummary.available)} hrs available
+          </span>
+          <span style={{ color: C.faint }}>|</span>
+          <span style={{ ...MF, fontSize: 12, color: weekHoursSummary.color, fontWeight: 700 }}>
+            {fmtHours(weekHoursSummary.logged)} hrs logged
+          </span>
+          <span style={{ color: C.faint }}>|</span>
+          <span style={{ ...MF, fontSize: 12, color: C.muted }}>
+            {fmtHours(weekHoursSummary.remaining)} hrs remaining
+          </span>
+        </div>
+      )}
 
       {/* Desktop toolbar */}
       <div style={{

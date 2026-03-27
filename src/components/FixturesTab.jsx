@@ -25,8 +25,10 @@ export default function FixturesTab({ job, onRefresh }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(true);
-  const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week"
+  const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week" | "received-today"
   const [issuesFilter, setIssuesFilter] = useState(false); // show only unreported issues
+  const [quickReportMode, setQuickReportMode] = useState(false);
+  const [quickReportSelected, setQuickReportSelected] = useState(new Set());
   const isMobile = useMobile();
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [sectionNicknames, setSectionNicknames] = useState({});
@@ -82,16 +84,40 @@ export default function FixturesTab({ job, onRefresh }) {
   const deliveryStats = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const weekAhead = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-    let overdue = 0, arrivingToday = 0, thisWeek = 0;
+    let overdue = 0, arrivingToday = 0, thisWeek = 0, receivedToday = 0;
     const hasAnyDates = items.some(i => i.delDate);
     for (const item of items) {
+      // Count received today regardless of delivery date
+      if (item.dateReceived === today) receivedToday++;
       if (!item.delDate) continue;
       const rec = parseInt(item.qtyReceived || "0");
       if (item.delDate < today && rec === 0) overdue++;
       if (item.delDate === today) arrivingToday++;
       if (item.delDate > today && item.delDate <= weekAhead) thisWeek++;
     }
-    return { overdue, arrivingToday, thisWeek, hasAnyDates };
+    return { overdue, arrivingToday, thisWeek, receivedToday, hasAnyDates };
+  }, [items]);
+
+  // Delivery timeline: next 7 days with delivery counts
+  const deliveryTimeline = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = [];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const count = items.filter(it => it.delDate === dateStr).length;
+      if (count > 0) {
+        days.push({
+          dateStr,
+          label: `${dayNames[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`,
+          count,
+        });
+      }
+    }
+    return days;
   }, [items]);
 
   // Unreported issues computation
@@ -229,12 +255,86 @@ export default function FixturesTab({ job, onRefresh }) {
   };
 
   const handleItemClick = (item) => {
-    if (bulkMode) {
+    if (quickReportMode) {
+      toggleQuickReportSelect(item.id);
+    } else if (bulkMode) {
       toggleSelect(item.id);
     } else if (quickReceiveId === item.id) {
       setQuickReceiveId(null);
     } else {
       setEditItem(item);
+    }
+  };
+
+  const toggleQuickReportSelect = useCallback((id) => {
+    setQuickReportSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleQuickReportGenerate = async () => {
+    const selected = items.filter(i => quickReportSelected.has(i.id));
+    if (selected.length === 0) return;
+
+    const header = `SiteKit Issue Report — ${job.name}\nStore: ${job.store} #${job.storeNumber}\nDate: ${new Date().toLocaleDateString()}\n`;
+    let body = header;
+
+    const missingItems = selected.filter(i => i.missingParts);
+    const damagedItems = selected.filter(i => i.damaged);
+    const orderItems = selected.filter(i => i.additionalOrders);
+
+    if (missingItems.length > 0) {
+      body += `\nMISSING PARTS (${missingItems.length} item${missingItems.length > 1 ? 's' : ''}):\n`;
+      for (const i of missingItems) {
+        const qtyLine = i.missingPartsQty ? ` | Qty Missing: ${i.missingPartsQty}` : '';
+        body += `• ${i.itemNumber || '---'} — ${i.description}${qtyLine}\n  ${i.missingParts}\n  Qty Ordered: ${i.qtyOrdered || 'N/A'} | Section: ${i.section || 'N/A'}\n`;
+      }
+    }
+    if (damagedItems.length > 0) {
+      body += `\nDAMAGE (${damagedItems.length} item${damagedItems.length > 1 ? 's' : ''}):\n`;
+      for (const i of damagedItems) {
+        const qtyLine = i.damagedQty ? ` | Qty Damaged: ${i.damagedQty}` : '';
+        body += `• ${i.itemNumber || '---'} — ${i.description}${qtyLine}\n  ${i.damageNotes || 'see photo'}\n  Qty Ordered: ${i.qtyOrdered || 'N/A'} | Section: ${i.section || 'N/A'}\n`;
+      }
+    }
+    if (orderItems.length > 0) {
+      body += `\nADDITIONAL ORDERS (${orderItems.length} item${orderItems.length > 1 ? 's' : ''}):\n`;
+      for (const i of orderItems) {
+        const qtyLine = i.additionalOrdersQty ? ` | Qty Needed: ${i.additionalOrdersQty}` : '';
+        body += `• ${i.itemNumber || '---'} — ${i.description}${qtyLine}\n  ${i.additionalOrders}\n  Section: ${i.section || 'N/A'}\n`;
+      }
+    }
+
+    // Items with no specific issue type but still selected
+    const noIssueItems = selected.filter(i => !i.missingParts && !i.damaged && !i.additionalOrders);
+    if (noIssueItems.length > 0) {
+      body += `\nOTHER ITEMS (${noIssueItems.length}):\n`;
+      for (const i of noIssueItems) {
+        body += `• ${i.itemNumber || '---'} — ${i.description} | Qty Ordered: ${i.qtyOrdered || 'N/A'} | Section: ${i.section || 'N/A'}\n`;
+      }
+    }
+
+    let shared = false;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `SiteKit Report — ${job.name}`, text: body });
+        shared = true;
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          try { await navigator.clipboard.writeText(body); shared = true; } catch {}
+        }
+      }
+    } else {
+      try { await navigator.clipboard.writeText(body); shared = true; } catch {}
+    }
+
+    if (shared) {
+      toast.success(`Report generated for ${selected.length} items`);
+      setQuickReportMode(false);
+      setQuickReportSelected(new Set());
     }
   };
 
@@ -271,6 +371,8 @@ export default function FixturesTab({ job, onRefresh }) {
       if (deliveryFilter === "overdue") df = item.delDate && item.delDate < today && rec === 0;
       else if (deliveryFilter === "today") df = item.delDate === today;
       else if (deliveryFilter === "week") df = item.delDate && item.delDate > today && item.delDate <= weekAhead;
+      else if (deliveryFilter === "received-today") df = item.dateReceived === today;
+      else if (deliveryFilter.match(/^\d{4}-\d{2}-\d{2}$/)) df = item.delDate === deliveryFilter;
     }
 
     // Unreported issues filter
@@ -299,10 +401,80 @@ export default function FixturesTab({ job, onRefresh }) {
   const cols = showQtyCol
     ? "60px 55px 90px 1fr 60px 60px 75px 85px 95px"
     : "60px 55px 90px 1fr 60px 75px 85px 95px";
-  const headerCols = bulkMode ? `36px ${cols}` : cols;
+  const headerCols = (bulkMode || quickReportMode) ? `36px ${cols}` : cols;
 
   return (
     <>
+      {/* Job Dashboard Cards */}
+      {items.length > 0 && (
+        <div className="no-print" style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr",
+          gap: 10, padding: isMobile ? "10px 14px" : "12px 18px",
+          background: C.card, borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+        }}>
+          {/* Overdue */}
+          <button onClick={() => { setDeliveryFilter(deliveryFilter === "overdue" ? null : "overdue"); setIssuesFilter(false); }} style={{
+            padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+            textAlign: "center", transition: "all 0.15s", border: "none",
+            background: deliveryFilter === "overdue" ? C.redDim : `rgba(248,81,73,0.06)`,
+            outline: deliveryFilter === "overdue" ? `2px solid ${C.redBorder}` : "2px solid transparent",
+          }}>
+            <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: deliveryStats.overdue > 0 ? C.red : C.faint, lineHeight: 1 }}>
+              {deliveryStats.overdue}
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: deliveryStats.overdue > 0 ? C.red : C.faint, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Overdue
+            </div>
+          </button>
+
+          {/* Arriving This Week */}
+          <button onClick={() => { setDeliveryFilter(deliveryFilter === "week" ? null : "week"); setIssuesFilter(false); }} style={{
+            padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+            textAlign: "center", transition: "all 0.15s", border: "none",
+            background: deliveryFilter === "week" ? C.blueDim : `rgba(88,166,255,0.06)`,
+            outline: deliveryFilter === "week" ? `2px solid ${C.blueBorder}` : "2px solid transparent",
+          }}>
+            <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: deliveryStats.thisWeek > 0 ? C.blue : C.faint, lineHeight: 1 }}>
+              {deliveryStats.thisWeek}
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: deliveryStats.thisWeek > 0 ? C.blue : C.faint, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              This Week
+            </div>
+          </button>
+
+          {/* Unreported Issues */}
+          <button onClick={() => { setIssuesFilter(!issuesFilter); setDeliveryFilter(null); }} style={{
+            padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+            textAlign: "center", transition: "all 0.15s", border: "none",
+            background: issuesFilter ? C.accentDim : `rgba(249,115,22,0.06)`,
+            outline: issuesFilter ? `2px solid ${C.accentBorder}` : "2px solid transparent",
+          }}>
+            <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: unreportedIssues.length > 0 ? C.accent : C.faint, lineHeight: 1 }}>
+              {unreportedIssues.length}
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: unreportedIssues.length > 0 ? C.accent : C.faint, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Issues
+            </div>
+          </button>
+
+          {/* Received Today */}
+          <button onClick={() => { setDeliveryFilter(deliveryFilter === "received-today" ? null : "received-today"); setIssuesFilter(false); }} style={{
+            padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+            textAlign: "center", transition: "all 0.15s", border: "none",
+            background: deliveryFilter === "received-today" ? C.greenDim : `rgba(63,185,80,0.06)`,
+            outline: deliveryFilter === "received-today" ? `2px solid ${C.greenBorder}` : "2px solid transparent",
+          }}>
+            <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: deliveryStats.receivedToday > 0 ? C.green : C.faint, lineHeight: 1 }}>
+              {deliveryStats.receivedToday}
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 600, color: deliveryStats.receivedToday > 0 ? C.green : C.faint, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Received Today
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       {isMobile ? (
         /* ── Mobile Toolbar ── */
@@ -339,6 +511,9 @@ export default function FixturesTab({ job, onRefresh }) {
           {/* Row 2: Primary actions */}
           <div style={{ padding: "4px 14px 10px", display: "flex", gap: 8 }}>
             <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Import</Btn>
+            <Btn variant={quickReportMode ? "danger" : "purple"} size="sm" icon={quickReportMode ? "✕" : "📋"} onClick={() => { setQuickReportMode(v => !v); setQuickReportSelected(new Set()); }} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>
+              {quickReportMode ? "Cancel" : "Quick Report"}
+            </Btn>
             <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Add Item</Btn>
           </div>
 
@@ -488,6 +663,9 @@ export default function FixturesTab({ job, onRefresh }) {
           <Toggle checked={bulkMode} onChange={v => { setBulkMode(v); setSelectedIds(new Set()); }} label="Bulk" data-testid="bulk-toggle" />
           <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" data-testid="import-btn">Import</Btn>
           <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} data-tutorial="report" data-testid="report-btn">Report</Btn>
+          <Btn variant={quickReportMode ? "danger" : "purple"} size="sm" icon={quickReportMode ? "✕" : "📋"} onClick={() => { setQuickReportMode(v => !v); setQuickReportSelected(new Set()); }}>
+            {quickReportMode ? "Cancel" : "Quick Report"}
+          </Btn>
           {unreportedIssues.length > 0 && (
             <>
               <button onClick={() => setIssuesFilter(v => !v)} style={{
@@ -619,6 +797,56 @@ export default function FixturesTab({ job, onRefresh }) {
                 </button>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Delivery Timeline */}
+      {deliveryTimeline.length > 0 && (
+        <div className="no-print" style={{
+          flexShrink: 0, display: 'flex', gap: 6, alignItems: 'center',
+          padding: isMobile ? '6px 14px' : '6px 18px',
+          borderBottom: `1px solid ${C.borderLight}`,
+          background: C.bg, overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        }}>
+          <span style={{ fontSize: 9, color: C.faint, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap', marginRight: 4 }}>
+            Upcoming:
+          </span>
+          {deliveryTimeline.map(day => {
+            const isActive = deliveryFilter === day.dateStr;
+            return (
+              <button
+                key={day.dateStr}
+                onClick={() => setDeliveryFilter(isActive ? null : day.dateStr)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '4px 10px', borderRadius: 16, fontSize: 11, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  minHeight: isMobile ? 34 : 26, flexShrink: 0,
+                  background: isActive ? C.accentDim : 'transparent',
+                  color: isActive ? C.accent : C.muted,
+                  border: `1px solid ${isActive ? C.accentBorder : C.border}`,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {day.label}
+                <span style={{
+                  ...MF, fontSize: 10, fontWeight: 700, color: isActive ? C.accent : C.text,
+                  background: isActive ? 'transparent' : C.card,
+                  padding: '0 5px', borderRadius: 8,
+                }}>
+                  ({day.count})
+                </span>
+              </button>
+            );
+          })}
+          {deliveryFilter && deliveryFilter.match(/^\d{4}-\d{2}-\d{2}$/) && (
+            <button onClick={() => setDeliveryFilter(null)} style={{
+              fontSize: 10, color: C.faint, background: 'transparent', border: 'none',
+              cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', whiteSpace: 'nowrap',
+            }}>
+              Clear
+            </button>
           )}
         </div>
       )}
@@ -771,15 +999,16 @@ export default function FixturesTab({ job, onRefresh }) {
                   onQuickReceive={() => setQuickReceiveId(quickReceiveId === entry.id ? null : entry.id)}
                   showQtyCol={showQtyCol}
                   groupBy={groupBy}
-                  bulkMode={bulkMode}
-                  isSelected={selectedIds.has(entry.id)}
-                  onToggleSelect={toggleSelect}
+                  bulkMode={bulkMode || quickReportMode}
+                  isSelected={quickReportMode ? quickReportSelected.has(entry.id) : selectedIds.has(entry.id)}
+                  onToggleSelect={quickReportMode ? toggleQuickReportSelect : toggleSelect}
                 />
-                {quickReceiveId === entry.id && !bulkMode && (
+                {quickReceiveId === entry.id && !bulkMode && !quickReportMode && (
                   <QuickReceive
                     item={entry}
                     onSave={(data) => handleQuickReceive(entry.id, data)}
                     onCancel={() => setQuickReceiveId(null)}
+                    onOpenModal={() => { setQuickReceiveId(null); setEditItem(entry); }}
                   />
                 )}
               </div>
@@ -853,16 +1082,17 @@ export default function FixturesTab({ job, onRefresh }) {
                         onQuickReceive={() => setQuickReceiveId(quickReceiveId === item.id ? null : item.id)}
                         showQtyCol={showQtyCol}
                         groupBy={groupBy}
-                        bulkMode={bulkMode}
-                        isSelected={selectedIds.has(item.id)}
-                        onToggleSelect={toggleSelect}
+                        bulkMode={bulkMode || quickReportMode}
+                        isSelected={quickReportMode ? quickReportSelected.has(item.id) : selectedIds.has(item.id)}
+                        onToggleSelect={quickReportMode ? toggleQuickReportSelect : toggleSelect}
                       />
                     </div>
-                    {quickReceiveId === item.id && !bulkMode && (
+                    {quickReceiveId === item.id && !bulkMode && !quickReportMode && (
                       <QuickReceive
                         item={item}
                         onSave={(data) => handleQuickReceive(item.id, data)}
                         onCancel={() => setQuickReceiveId(null)}
+                        onOpenModal={() => { setQuickReceiveId(null); setEditItem(item); }}
                       />
                     )}
                   </React.Fragment>
@@ -892,6 +1122,27 @@ export default function FixturesTab({ job, onRefresh }) {
         />
       )}
       {showReport && <ReportModal job={job} groupBy={groupBy} onClose={() => setShowReport(false)} />}
+
+      {/* Quick Report floating action bar */}
+      {quickReportMode && (
+        <div className="no-print" style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+          padding: "12px 18px", display: "flex", alignItems: "center", gap: 12,
+          background: C.card, borderTop: `2px solid ${C.purpleBorder}`,
+          boxShadow: "0 -4px 20px rgba(0,0,0,0.4)",
+          justifyContent: "center",
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>
+            {quickReportSelected.size} selected
+          </span>
+          <Btn variant="purple" size="sm" icon="📋" disabled={quickReportSelected.size === 0} onClick={handleQuickReportGenerate}>
+            Generate Report
+          </Btn>
+          <Btn variant="ghost" size="sm" onClick={() => { setQuickReportMode(false); setQuickReportSelected(new Set()); }}>
+            Cancel
+          </Btn>
+        </div>
+      )}
     </>
   );
 }

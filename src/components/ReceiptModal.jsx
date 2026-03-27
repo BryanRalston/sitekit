@@ -57,6 +57,16 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
   const [ocrStage, setOcrStage] = useState(null); // 'enhancing' | 'scanning' | 'parsing' | 'done' | 'error'
   const [ocrResult, setOcrResult] = useState(null); // { parsed, confidence, filled, error? }
   const [parsedItems, setParsedItems] = useState(receipt?.items || []);
+  const [categorySuggestion, setCategorySuggestion] = useState(null); // string | null
+
+  // Store -> category learning: load mappings
+  const getStoreCategoryMap = () => {
+    try { return JSON.parse(localStorage.getItem('sitekit_store_categories') || '{}'); } catch { return {}; }
+  };
+
+  const saveStoreCategoryMap = (map) => {
+    localStorage.setItem('sitekit_store_categories', JSON.stringify(map));
+  };
 
   // Load store names for autocomplete
   useEffect(() => {
@@ -71,6 +81,23 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
       });
     }
   }, [receipt]);
+
+  // Check for category suggestion when store name changes (new receipts only)
+  useEffect(() => {
+    if (isEditing) { setCategorySuggestion(null); return; }
+    const storeTrimmed = f.store.trim();
+    if (!storeTrimmed) { setCategorySuggestion(null); return; }
+    const map = getStoreCategoryMap();
+    // Case-insensitive lookup
+    const key = Object.keys(map).find(k => k.toLowerCase() === storeTrimmed.toLowerCase());
+    const mapped = key ? map[key] : null;
+    // Only suggest if different from current category
+    if (mapped && mapped !== f.category) {
+      setCategorySuggestion(mapped);
+    } else {
+      setCategorySuggestion(null);
+    }
+  }, [f.store, f.category, isEditing]);
 
   const set = (key) => (value) => {
     setF(prev => {
@@ -188,6 +215,14 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
         const formData = new FormData();
         formData.append('photo', photoFile);
         await api.uploadReceiptPhoto(savedReceipt.id, formData);
+      }
+
+      // Save store -> category mapping for learning
+      const storeName = f.store.trim();
+      if (storeName && f.category) {
+        const map = getStoreCategoryMap();
+        map[storeName] = f.category;
+        saveStoreCategoryMap(map);
       }
 
       await onSave();
@@ -391,6 +426,22 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
               );
             })}
           </div>
+          {/* Category suggestion from store learning */}
+          {categorySuggestion && (
+            <button
+              onClick={() => { set('category')(categorySuggestion); setCategorySuggestion(null); }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '4px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+                background: C.tealDim, color: C.teal, border: `1px solid ${C.tealBorder}`,
+                alignSelf: 'flex-start', transition: 'all 0.15s',
+              }}
+            >
+              Usually: {categorySuggestion}
+              <span style={{ fontSize: 10, opacity: 0.7 }}>— tap to apply</span>
+            </button>
+          )}
         </div>
 
         {/* Gas toggle */}

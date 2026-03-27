@@ -24,13 +24,16 @@ async function shareIssue(job, item, issueType) {
 
   if (issueType === 'missing') {
     subject = `Missing Parts — ${item.itemNumber} — ${job.name}`;
-    body = header + `MISSING PARTS:\n• ${item.itemNumber} (${item.description})\n  ${item.missingParts}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
+    const qtyLine = item.missingPartsQty ? `  Qty Missing: ${item.missingPartsQty}\n` : '';
+    body = header + `MISSING PARTS:\n• ${item.itemNumber} (${item.description})\n${qtyLine}  ${item.missingParts}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
   } else if (issueType === 'order') {
     subject = `Additional Order Needed — ${item.itemNumber} — ${job.name}`;
-    body = header + `ADDITIONAL ORDER NEEDED:\n• ${item.itemNumber} (${item.description})\n  ${item.additionalOrders}\n  Section: ${item.section || 'N/A'}`;
+    const qtyLine = item.additionalOrdersQty ? `  Qty Needed: ${item.additionalOrdersQty}\n` : '';
+    body = header + `ADDITIONAL ORDER NEEDED:\n• ${item.itemNumber} (${item.description})\n${qtyLine}  ${item.additionalOrders}\n  Section: ${item.section || 'N/A'}`;
   } else if (issueType === 'damage') {
     subject = `Damage Report — ${item.itemNumber} — ${job.name}`;
-    body = header + `DAMAGE REPORT:\n• ${item.itemNumber} (${item.description})\n  ${item.damageNotes}\n  Qty: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
+    const qtyLine = item.damagedQty ? `  Qty Damaged: ${item.damagedQty}\n` : '';
+    body = header + `DAMAGE REPORT:\n• ${item.itemNumber} (${item.description})\n${qtyLine}  ${item.damageNotes}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
   }
 
   if (navigator.share) {
@@ -109,7 +112,7 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
   const [f, setF] = useState(item || {
     vendor: "", materialClass: "", description: "", itemNumber: "", fixtureBook: "", section: "",
     qtyOrdered: "", delDate: "", showQtyOrdered: true, qtyReceived: "", dateReceived: "",
-    missingParts: "", additionalOrders: "", damaged: false, damageNotes: "", notes: "", hasPhoto: false,
+    missingParts: "", missingPartsQty: "", additionalOrders: "", additionalOrdersQty: "", damaged: false, damagedQty: "", damageNotes: "", notes: "", hasPhoto: false,
     missingPartsReported: "", missingPartsResolved: "",
     additionalOrdersReported: "", additionalOrdersResolved: "",
     damageReported: "", damageResolved: ""
