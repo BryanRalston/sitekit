@@ -115,42 +115,31 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
           try { localStorage.setItem('sitekit_scan_debug', JSON.stringify({ status: stage, time: new Date().toISOString() })); } catch {}
         },
       );
-      const { parsed, confidence, rawText, log: scanLog } = result;
-
+      const parsed = result?.parsed || {};
+      const confidence = result?.confidence;
+      const rawText = result?.rawText || '';
+      const scanLog = result?.log;
       const filled = [];
 
-      // Auto-fill only empty fields
-      if (parsed.store && !f.store.trim()) {
-        set('store')(parsed.store);
-        filled.push('store');
-      }
-      if (parsed.amount && !f.amount.trim()) {
-        set('amount')(parsed.amount);
-        filled.push('amount');
-      }
-      if (parsed.date && f.date === new Date().toISOString().slice(0, 10)) {
-        set('date')(parsed.date);
-        filled.push('date');
-      }
-      // Auto-fill category if detected and still default
-      if (parsed.category && f.category === 'Materials' && parsed.category !== 'Materials') {
-        set('category')(parsed.category);
-        if (parsed.category === 'Gas') set('isGas')(true);
-        filled.push('category');
+      // Auto-fill only empty fields — each wrapped to prevent cascade failure
+      try {
+        if (parsed.store && !(f.store || '').trim()) { set('store')(parsed.store); filled.push('store'); }
+        if (parsed.amount && !(f.amount || '').trim()) { set('amount')(String(parsed.amount)); filled.push('amount'); }
+        if (parsed.date && f.date === new Date().toISOString().slice(0, 10)) { set('date')(parsed.date); filled.push('date'); }
+        if (parsed.category && f.category === 'Materials' && parsed.category !== 'Materials') {
+          set('category')(parsed.category);
+          if (parsed.category === 'Gas') set('isGas')(true);
+          filled.push('category');
+        }
+        if (parsed.items && parsed.items.length > 0) {
+          setParsedItems(parsed.items.map(it => ({ name: it.name || '', qty: it.qty || 1, price: it.totalPrice || 0 })));
+          filled.push(`${parsed.items.length} items`);
+        }
+      } catch (fillErr) {
+        console.warn('Auto-fill partial failure:', fillErr);
       }
 
-      // Auto-fill items from parsed line items
-      if (parsed.items.length > 0) {
-        setParsedItems(parsed.items.map(it => ({
-          name: it.name,
-          qty: it.qty,
-          price: it.totalPrice,
-        })));
-        filled.push(`${parsed.items.length} items`);
-      }
-
-      const diagSuccess = { rawText, store: parsed.store, amount: parsed.amount, date: parsed.date, items: parsed.items?.length, confidence, filled, scanLog, time: new Date().toISOString() };
-      try { localStorage.setItem('sitekit_scan_debug', JSON.stringify(diagSuccess)); } catch {}
+      try { localStorage.setItem('sitekit_scan_debug', JSON.stringify({ rawText, store: parsed.store, amount: parsed.amount, date: parsed.date, items: (parsed.items || []).length, confidence, filled, scanLog, time: new Date().toISOString() })); } catch {}
       setOcrResult({ parsed, confidence, filled });
     } catch (err) {
       console.error('Receipt scan failed:', err);
