@@ -422,7 +422,7 @@ function AppInner() {
                     tutorial: null
                   },
                   {
-                    id: "visual", icon: "🖼", label: isMobile ? "Photos" : "Visual Reference",
+                    id: "visual", icon: "🖼", label: isMobile ? "Dept" : "Department",
                     count: (activeJobFull.departments || []).reduce((a, d) => a + (d.photos || []).length, 0),
                     tutorial: "tab-visual"
                   },
