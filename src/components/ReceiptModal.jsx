@@ -37,6 +37,7 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
   const { toast } = useToast();
   const isEditing = !!receipt;
   const fileRef = useRef(null);
+  const galleryRef = useRef(null);
 
   const [f, setF] = useState({
     store: receipt?.store || '',
@@ -225,12 +226,23 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
             ref={fileRef}
             type="file"
             accept="image/*"
+            capture="environment"
+            onChange={handlePhotoCapture}
+            style={{ display: 'none' }}
+          />
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
             onChange={handlePhotoCapture}
             style={{ display: 'none' }}
           />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current?.click()}>
-              {photoPreview ? 'Replace Photo' : 'Take Photo'}
+              {photoPreview ? 'Retake' : 'Take Photo'}
+            </Btn>
+            <Btn variant="ghost" size="sm" icon="🖼️" onClick={() => galleryRef.current?.click()}>
+              Choose Photo
             </Btn>
             {photoPreview && !ocrLoading && (
               <Btn variant="teal" size="sm" icon="🔍" onClick={handleOCR}>
