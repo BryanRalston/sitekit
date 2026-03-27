@@ -28,7 +28,7 @@ export default function FixturesTab({ job, onRefresh }) {
   const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week"
   const [issuesFilter, setIssuesFilter] = useState(false); // show only unreported issues
   const isMobile = useMobile();
-  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [sectionNicknames, setSectionNicknames] = useState({});
   const [editingNickname, setEditingNickname] = useState(null); // group name being edited
   const [nicknameInput, setNicknameInput] = useState("");
@@ -62,7 +62,7 @@ export default function FixturesTab({ job, onRefresh }) {
   }, [job?.id]);
 
   const toggleGroupCollapse = useCallback((groupName) => {
-    setCollapsedGroups(prev => {
+    setExpandedGroups(prev => {
       const next = new Set(prev);
       if (next.has(groupName)) next.delete(groupName);
       else next.add(groupName);
@@ -695,7 +695,7 @@ export default function FixturesTab({ job, onRefresh }) {
             const flat = [];
             for (const [grp, gitems] of Object.entries(grouped)) {
               flat.push({ _type: 'header', _group: grp, _count: gitems.length });
-              if (!collapsedGroups.has(grp)) {
+              if (!!expandedGroups.has(grp)) {
                 for (let idx = 0; idx < gitems.length; idx++) {
                   flat.push({ _type: 'item', _itemIdx: idx, ...gitems[idx] });
                 }
@@ -708,7 +708,7 @@ export default function FixturesTab({ job, onRefresh }) {
           containerStyle={{ flex: 1 }}
           renderItem={(entry, i) => {
             if (entry._type === 'header') {
-              const isCollapsed = collapsedGroups.has(entry._group);
+              const isCollapsed = !expandedGroups.has(entry._group);
               const nickname = sectionNicknames[entry._group];
               const displayName = nickname || entry._group;
               return (
@@ -790,7 +790,7 @@ export default function FixturesTab({ job, onRefresh }) {
         /* ── Standard rendering for small lists ── */
         <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
           {Object.entries(grouped).map(([grp, gitems]) => {
-            const isCollapsed = collapsedGroups.has(grp);
+            const isCollapsed = !expandedGroups.has(grp);
             const nickname = sectionNicknames[grp];
             const displayName = nickname || grp;
             return (

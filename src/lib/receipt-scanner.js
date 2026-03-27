@@ -428,30 +428,39 @@ export function parseReceipt(text) {
   }
 
   if (!result.store) {
-    const PHONE_RE = /(\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}|\d{10}|\d{3}[\s.\-]\d{4})/;
-    const ADDRESS_RE = /\b\d+\s+\w+\s+(ST|AVE|BLVD|DR|RD|SUITE|STE|HWY|LN|CT|PL|WAY|STREET|AVENUE|BOULEVARD|DRIVE|ROAD|HIGHWAY|LANE|COURT|PLACE)\b\.?\s*,?/i;
+    // Strategy: find the address line, then take the line above it as the store name
+    const ADDRESS_RE = /\b\d+\s+\w+\s+(ST|AVE|BLVD|DR|RD|SUITE|STE|HWY|LN|CT|PL|WAY|STREET|AVENUE|BOULEVARD|DRIVE|ROAD|HIGHWAY|LANE|COURT|PLACE)\b/i;
     const CITY_STATE_ZIP_RE = /\b[A-Z]{2}\s+\d{5}(-\d{4})?\b/;
-    const URL_EMAIL_RE = /(www\.|\.com|\.net|\.org|@)/i;
-    const DATE_TIME_RE = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$|^\d{1,2}:\d{2}/;
-    const TRANS_ID_RE = /^(TRANS|RECEIPT|TICKET|ORDER|REF|AUTH|SEQUENCE|TRACE|TERM|TERMINAL|REGISTER|STORE)\s*[#:]?\s*\d/i;
-    const NO_REAL_LETTERS_RE = /^[^a-zA-Z]*$/;
-    const ZIP_AT_END_RE = /\b\d{5}(-\d{4})?\s*$/;
 
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
-      const line = lines[i];
-      if (line.length < 3 || line.length > 40) continue;
-      if (!/[a-zA-Z]{2,}/.test(line)) continue;
-      if (PHONE_RE.test(line)) continue;
-      if (ADDRESS_RE.test(line)) continue;
-      if (CITY_STATE_ZIP_RE.test(line)) continue;
-      if (URL_EMAIL_RE.test(line)) continue;
-      if (DATE_TIME_RE.test(line)) continue;
-      if (TRANS_ID_RE.test(line)) continue;
-      if (NO_REAL_LETTERS_RE.test(line)) continue;
-      if (ZIP_AT_END_RE.test(line)) continue;
-      if (/^\d+\s+(N|S|E|W|North|South|East|West)\b/i.test(line)) continue;
-      result.store = line;
-      break;
+    for (let i = 0; i < lines.length; i++) {
+      if (ADDRESS_RE.test(lines[i]) || CITY_STATE_ZIP_RE.test(lines[i])) {
+        // Found address — store name is the closest non-junk line above
+        for (let j = i - 1; j >= 0; j--) {
+          const candidate = lines[j];
+          if (candidate.length < 3) continue;
+          if (/^[^a-zA-Z]*$/.test(candidate)) continue;
+          if (/^\d{1,2}[\/\-]\d{1,2}|^\d{2}:\d{2}/.test(candidate)) continue;
+          if (/(www\.|\.com|@)/.test(candidate)) continue;
+          result.store = candidate;
+          break;
+        }
+        if (result.store) break;
+      }
+    }
+
+    // Fallback: first substantial line in first 5 lines
+    if (!result.store) {
+      const PHONE_RE = /(\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}|\d{10})/;
+      for (let i = 0; i < Math.min(5, lines.length); i++) {
+        const line = lines[i];
+        if (line.length < 3 || line.length > 40) continue;
+        if (!/[a-zA-Z]{2,}/.test(line)) continue;
+        if (PHONE_RE.test(line) || ADDRESS_RE.test(line) || CITY_STATE_ZIP_RE.test(line)) continue;
+        if (/(www\.|\.com|@)/i.test(line)) continue;
+        if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$|^\d{2}:\d{2}/.test(line)) continue;
+        result.store = line;
+        break;
+      }
     }
   }
 
