@@ -549,32 +549,25 @@ export async function scanReceipt(imageDataUrl, onStage) {
     const enhanced = await withTimeout(enhanceImage(imageDataUrl), 10000, 'Image enhancement');
     const trimmed = await withTimeout(trimToContent(enhanced), 5000, 'Image trim');
 
-    // Stage 2: OCR (45s timeout including CDN load)
+    // Stage 2: OCR
     onStage?.('scanning');
+    // Wait for Tesseract (preloaded via script tag in index.html)
     if (!window.Tesseract) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-      document.head.appendChild(script);
-      await withTimeout(
-        new Promise((resolve, reject) => {
-          script.onload = resolve;
-          script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
-        }),
-        30000, 'Tesseract.js loading'
-      );
-
-      // Wait for Tesseract to fully initialize
+      // Fallback: wait up to 10s for the deferred script to load
       let attempts = 0;
-      while (!window.Tesseract?.createWorker && attempts < 50) {
+      while (!window.Tesseract && attempts < 100) {
         await new Promise(r => setTimeout(r, 100));
         attempts++;
       }
-      if (!window.Tesseract?.createWorker) {
-        throw new Error('Tesseract.js failed to initialize');
+      if (!window.Tesseract) {
+        throw new Error('Tesseract.js not available — check your internet connection');
       }
     }
 
-    const worker = await window.Tesseract.createWorker('eng');
+    const worker = await window.Tesseract.createWorker('eng', 1, {
+      workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+      corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
+    });
     const ocrResult = await withTimeout(worker.recognize(trimmed), 45000, 'OCR recognition');
     await worker.terminate();
     const rawText = ocrResult.data.text;

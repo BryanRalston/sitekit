@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { C, TF } from '../tokens';
 import { Btn } from './ui';
 import PhotoCard from './PhotoCard';
@@ -10,6 +10,7 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState(dept.name);
   const { toast, confirm: toastConfirm } = useToast();
+  const addPhotoRef = useRef(null);
 
   const photos = dept.photos || [];
   const done = photos.filter(p => p.completed).length;
@@ -38,9 +39,22 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
     }
   };
 
-  const addPhoto = async () => {
+  const addPhoto = () => {
+    addPhotoRef.current?.click();
+  };
+
+  const handleAddPhotoFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
     try {
-      await api.createPhoto({ departmentId: dept.id, title: '', notes: '' });
+      const fd = new FormData();
+      fd.append('photo', file);
+      fd.append('type', 'department');
+      fd.append('departmentId', dept.id);
+      if (jobId) fd.append('job_id', jobId);
+      await api.uploadPhoto(fd);
+      toast.success('Photo added');
       onRefresh();
     } catch (err) {
       toast.error('Failed to add photo: ' + err.message);
@@ -138,6 +152,8 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
                 onDelete={() => deletePhoto(photo)}
               />
             ))}
+            <input type="file" accept="image/*" ref={addPhotoRef} style={{ display: 'none' }}
+              onChange={handleAddPhotoFile} />
             <div onClick={addPhoto} style={{
               minHeight: 195, border: `2px dashed ${C.border}`, borderRadius: 10,
               display: "flex", flexDirection: "column", alignItems: "center",
