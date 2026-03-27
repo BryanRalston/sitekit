@@ -107,9 +107,13 @@ export default function ReceiptModal({ receipt, jobId, onSave, onClose, onDelete
     setOcrResult(null);
     setOcrStage(null);
     try {
+      try { localStorage.setItem('sitekit_scan_debug', JSON.stringify({ status: 'started', time: new Date().toISOString() })); } catch {}
       const result = await scanReceipt(
         photoPreview,
-        (stage) => setOcrStage(stage),
+        (stage) => {
+          setOcrStage(stage);
+          try { localStorage.setItem('sitekit_scan_debug', JSON.stringify({ status: stage, time: new Date().toISOString() })); } catch {}
+        },
       );
       const { parsed, confidence, rawText, log: scanLog } = result;
 

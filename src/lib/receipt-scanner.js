@@ -534,6 +534,28 @@ export function scoreConfidence(parsed) {
 // Runs the complete scan pipeline with stage callbacks for UI feedback.
 // onStage('enhancing' | 'scanning' | 'parsing' | 'done' | 'error')
 
+// Simple resize — no enhancement, just downscale for mobile OCR
+function resizeForOCR(dataURL, maxWidth) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.onload = () => {
+      if (img.width <= maxWidth) { resolve(dataURL); return; }
+      const canvas = document.createElement('canvas');
+      const scale = maxWidth / img.width;
+      canvas.width = maxWidth;
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(dataURL); return; }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = dataURL;
+  });
+}
+
 // Helper: wrap a promise with a timeout
 function withTimeout(promise, ms, label) {
   return Promise.race([
@@ -547,13 +569,16 @@ export async function scanReceipt(imageDataUrl, onStage) {
   const t = (msg) => { const entry = `[${((performance.now()/1000)).toFixed(1)}s] ${msg}`; log.push(entry); console.log('[ScanReceipt]', entry); };
 
   try {
-    // Stage 1: Enhance (10s timeout)
-    t('Starting enhancement');
+    // Stage 1: Resize for mobile (skip heavy enhancement — causes OOM on phones)
+    t('Starting resize');
     onStage?.('enhancing');
-    const enhanced = await withTimeout(enhanceImage(imageDataUrl), 10000, 'Image enhancement');
-    t('Enhancement done');
-    const trimmed = await withTimeout(trimToContent(enhanced), 5000, 'Image trim');
-    t('Trim done');
+    let processed = imageDataUrl;
+    try {
+      processed = await withTimeout(resizeForOCR(imageDataUrl, 1200), 8000, 'Image resize');
+      t('Resize done');
+    } catch (resizeErr) {
+      t('Resize failed, using original: ' + resizeErr?.message);
+    }
 
     // Stage 2: OCR
     t('Starting OCR');
@@ -577,7 +602,7 @@ export async function scanReceipt(imageDataUrl, onStage) {
       corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/tesseract-core-simd-lstm.wasm.js',
     });
     t('Worker created');
-    const ocrResult = await withTimeout(worker.recognize(trimmed), 45000, 'OCR recognition');
+    const ocrResult = await withTimeout(worker.recognize(processed), 45000, 'OCR recognition');
     t('OCR done, text length: ' + (ocrResult?.data?.text?.length || 0));
     await worker.terminate();
     const rawText = ocrResult.data.text;
@@ -590,7 +615,7 @@ export async function scanReceipt(imageDataUrl, onStage) {
     t('Parse done — amount: ' + (parsed.amount || 'none') + ', store: ' + (parsed.store || 'none'));
 
     onStage?.('done');
-    return { parsed, confidence, rawText, enhancedImage: trimmed, log };
+    return { parsed, confidence, rawText, log };
   } catch (err) {
     t('ERROR: ' + (err?.message || String(err)));
     onStage?.('error');
