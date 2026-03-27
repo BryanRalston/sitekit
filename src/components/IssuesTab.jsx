@@ -55,17 +55,20 @@ async function shareText(title, body) {
 function buildIssueShareText(job, item, issueType) {
   const header = `SiteKit Issue Report — ${job.name}\nStore: ${job.store} #${job.storeNumber}\nDate: ${new Date().toLocaleDateString()}\n\n`;
   if (issueType === 'missing') {
-    return header + `MISSING PARTS:\n• ${item.itemNumber} (${item.description})\n  ${item.missingParts}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
+    const qtyLine = item.missingPartsQty ? `\n  Qty Missing: ${item.missingPartsQty}` : '';
+    return header + `MISSING PARTS:\n• ${item.itemNumber} (${item.description})${qtyLine}\n  ${item.missingParts}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
   } else if (issueType === 'order') {
-    return header + `ADDITIONAL ORDER NEEDED:\n• ${item.itemNumber} (${item.description})\n  ${item.additionalOrders}\n  Section: ${item.section || 'N/A'}`;
+    const qtyLine = item.additionalOrdersQty ? `\n  Qty Needed: ${item.additionalOrdersQty}` : '';
+    return header + `ADDITIONAL ORDER NEEDED:\n• ${item.itemNumber} (${item.description})${qtyLine}\n  ${item.additionalOrders}\n  Section: ${item.section || 'N/A'}`;
   } else {
-    return header + `DAMAGE REPORT:\n• ${item.itemNumber} (${item.description})\n  ${item.damageNotes}\n  Qty: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
+    const qtyLine = item.damagedQty ? `\n  Qty Damaged: ${item.damagedQty}` : '';
+    return header + `DAMAGE REPORT:\n• ${item.itemNumber} (${item.description})${qtyLine}\n  ${item.damageNotes}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
   }
 }
 
 // ─── Issue row component ─────────────────────────────────────────────────────
 
-function IssueRow({ item, issueType, details, status, reportedDate, resolvedDate, job, onUpdate, isMobile }) {
+function IssueRow({ item, issueType, details, qty, status, reportedDate, resolvedDate, job, onUpdate, isMobile }) {
   const { toast } = useToast();
 
   const handleMarkReported = async () => {
@@ -145,6 +148,16 @@ function IssueRow({ item, issueType, details, status, reportedDate, resolvedDate
         }}>
           {item.description || '---'}
         </span>
+        {qty && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+            background: C.accentDim || 'rgba(34,211,238,0.1)', color: C.accent,
+            border: `1px solid ${C.accentBorder || 'rgba(34,211,238,0.2)'}`,
+            whiteSpace: 'nowrap', fontFamily: 'inherit',
+          }}>
+            Qty: {qty}
+          </span>
+        )}
         {item.section && (
           <span style={{ fontSize: 10, color: C.faint }}>
             {item.section}
@@ -226,6 +239,7 @@ function IssueSection({ title, icon, color, colorDim, colorBorder, issues, job, 
           item={issue.item}
           issueType={issue.type}
           details={issue.details}
+          qty={issue.qty}
           status={issue.status}
           reportedDate={issue.reportedDate}
           resolvedDate={issue.resolvedDate}
@@ -257,6 +271,7 @@ export default function IssuesTab({ job, onRefresh }) {
           item,
           type: 'missing',
           details: item.missingParts,
+          qty: item.missingPartsQty,
           status: getIssueStatus(item.missingPartsReported, item.missingPartsResolved),
           reportedDate: item.missingPartsReported,
           resolvedDate: item.missingPartsResolved,
@@ -267,6 +282,7 @@ export default function IssuesTab({ job, onRefresh }) {
           item,
           type: 'damage',
           details: item.damageNotes || 'Marked as damaged',
+          qty: item.damagedQty,
           status: getIssueStatus(item.damageReported, item.damageResolved),
           reportedDate: item.damageReported,
           resolvedDate: item.damageResolved,
@@ -277,6 +293,7 @@ export default function IssuesTab({ job, onRefresh }) {
           item,
           type: 'order',
           details: item.additionalOrders,
+          qty: item.additionalOrdersQty,
           status: getIssueStatus(item.additionalOrdersReported, item.additionalOrdersResolved),
           reportedDate: item.additionalOrdersReported,
           resolvedDate: item.additionalOrdersResolved,
@@ -323,15 +340,24 @@ export default function IssuesTab({ job, onRefresh }) {
 
     if (missingItems.length > 0) {
       body += `\nMISSING PARTS (${missingItems.length} item${missingItems.length > 1 ? 's' : ''}):\n`;
-      for (const i of missingItems) body += `• ${i.itemNumber} — ${i.description} — ${i.missingParts}\n`;
+      for (const i of missingItems) {
+        const qtyTag = i.missingPartsQty ? ` (Qty: ${i.missingPartsQty})` : '';
+        body += `• ${i.itemNumber} — ${i.description}${qtyTag} — ${i.missingParts}\n`;
+      }
     }
     if (damagedItems.length > 0) {
       body += `\nDAMAGED (${damagedItems.length} item${damagedItems.length > 1 ? 's' : ''}):\n`;
-      for (const i of damagedItems) body += `• ${i.itemNumber} — ${i.description} — ${i.damageNotes || 'see photo'}\n`;
+      for (const i of damagedItems) {
+        const qtyTag = i.damagedQty ? ` (Qty: ${i.damagedQty})` : '';
+        body += `• ${i.itemNumber} — ${i.description}${qtyTag} — ${i.damageNotes || 'see photo'}\n`;
+      }
     }
     if (orderItems.length > 0) {
       body += `\nADDITIONAL ORDERS NEEDED (${orderItems.length} item${orderItems.length > 1 ? 's' : ''}):\n`;
-      for (const i of orderItems) body += `• ${i.itemNumber} — ${i.description} — ${i.additionalOrders}\n`;
+      for (const i of orderItems) {
+        const qtyTag = i.additionalOrdersQty ? ` (Qty: ${i.additionalOrdersQty})` : '';
+        body += `• ${i.itemNumber} — ${i.description}${qtyTag} — ${i.additionalOrders}\n`;
+      }
     }
 
     const ok = await shareText(`SiteKit Issues — ${job.name}`, body);

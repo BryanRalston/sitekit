@@ -164,8 +164,11 @@ export const api = {
       fixtureBook: sanitize(data.fixtureBook),
       section: sanitize(data.section),
       missingParts: sanitize(data.missingParts),
+      missingPartsQty: data.missingPartsQty ?? '',
       additionalOrders: sanitize(data.additionalOrders),
+      additionalOrdersQty: data.additionalOrdersQty ?? '',
       damageNotes: sanitize(data.damageNotes),
+      damagedQty: data.damagedQty ?? '',
       notes: sanitize(data.notes),
       createdAt: new Date().toISOString(),
     };

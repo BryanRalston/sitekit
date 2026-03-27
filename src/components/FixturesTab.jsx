@@ -142,15 +142,24 @@ export default function FixturesTab({ job, onRefresh }) {
 
     if (missingItems.length > 0) {
       body += `\nMISSING PARTS (${missingItems.length} item${missingItems.length > 1 ? 's' : ''}):\n`;
-      for (const i of missingItems) body += `• ${i.itemNumber} — ${i.description} — ${i.missingParts}\n`;
+      for (const i of missingItems) {
+        const qtyTag = i.missingPartsQty ? ` (Qty: ${i.missingPartsQty})` : '';
+        body += `• ${i.itemNumber} — ${i.description}${qtyTag} — ${i.missingParts}\n`;
+      }
     }
     if (damagedItems.length > 0) {
       body += `\nDAMAGED (${damagedItems.length} item${damagedItems.length > 1 ? 's' : ''}):\n`;
-      for (const i of damagedItems) body += `• ${i.itemNumber} — ${i.description} — ${i.damageNotes || 'see photo'}\n`;
+      for (const i of damagedItems) {
+        const qtyTag = i.damagedQty ? ` (Qty: ${i.damagedQty})` : '';
+        body += `• ${i.itemNumber} — ${i.description}${qtyTag} — ${i.damageNotes || 'see photo'}\n`;
+      }
     }
     if (orderItems.length > 0) {
       body += `\nADDITIONAL ORDERS NEEDED (${orderItems.length} item${orderItems.length > 1 ? 's' : ''}):\n`;
-      for (const i of orderItems) body += `• ${i.itemNumber} — ${i.description} — ${i.additionalOrders}\n`;
+      for (const i of orderItems) {
+        const qtyTag = i.additionalOrdersQty ? ` (Qty: ${i.additionalOrdersQty})` : '';
+        body += `• ${i.itemNumber} — ${i.description}${qtyTag} — ${i.additionalOrders}\n`;
+      }
     }
 
     let shared = false;

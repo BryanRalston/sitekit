@@ -225,7 +225,15 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
             Issues
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Inp label="Missing Parts" value={f.missingParts} onChange={s("missingParts")} placeholder="Describe missing parts..." multiline rows={2} />
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: 4 }}>Missing Parts</div>
+              </div>
+              <div style={{ width: 80, flexShrink: 0 }}>
+                <Inp label="Qty Missing" type="number" value={f.missingPartsQty} onChange={s("missingPartsQty")} min={0} step={1} />
+              </div>
+            </div>
+            <Inp value={f.missingParts} onChange={s("missingParts")} placeholder="Describe missing parts..." multiline rows={2} />
             <IssueTracker
               issueType="missing"
               hasContent={!!f.missingParts}
@@ -241,7 +249,15 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
                 } else { toast.error("Job context not available"); }
               }}
             />
-            <Inp label="Additional Items to Order" value={f.additionalOrders} onChange={s("additionalOrders")} placeholder="Additional items needed..." multiline rows={2} />
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: "0.09em", textTransform: "uppercase", marginBottom: 4 }}>Additional Items to Order</div>
+              </div>
+              <div style={{ width: 80, flexShrink: 0 }}>
+                <Inp label="Qty Needed" type="number" value={f.additionalOrdersQty} onChange={s("additionalOrdersQty")} min={0} step={1} />
+              </div>
+            </div>
+            <Inp value={f.additionalOrders} onChange={s("additionalOrders")} placeholder="Additional items needed..." multiline rows={2} />
             <IssueTracker
               issueType="order"
               hasContent={!!f.additionalOrders}
@@ -267,6 +283,9 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
                   display: "flex", flexDirection: "column", gap: 10, padding: 13,
                   background: C.redDim, borderRadius: 8, border: `1px solid ${C.redBorder}`
                 }}>
+                  <div style={{ width: 80 }}>
+                    <Inp label="Qty Damaged" type="number" value={f.damagedQty} onChange={s("damagedQty")} min={0} step={1} />
+                  </div>
                   <Inp label="Damage Notes" value={f.damageNotes} onChange={s("damageNotes")} placeholder="Describe damage..." multiline rows={2} />
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: "0.09em", textTransform: "uppercase", display: "block", marginBottom: 7 }}>
