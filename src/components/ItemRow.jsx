@@ -10,7 +10,30 @@ function issueIcon(hasIssue, reportedDate, resolvedDate, unreportedEmoji, title)
   return <span title={`${title} — Unreported`} style={{ fontSize: 11 }}>{unreportedEmoji}</span>;
 }
 
-export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, groupBy, bulkMode, isSelected, onToggleSelect }) {
+const ISSUE_BADGE_STYLES = {
+  damaged: { color: C.red, bg: C.redDim, border: C.redBorder, label: 'Damaged' },
+  missing: { color: C.yellow, bg: C.yellowDim, border: C.yellowBorder, label: 'Missing' },
+  additional: { color: C.blue, bg: C.blueDim, border: C.blueBorder, label: 'Need' },
+};
+
+function IssueBadge({ type, qty, onClick }) {
+  const s = ISSUE_BADGE_STYLES[type];
+  return (
+    <span
+      onClick={onClick}
+      style={{
+        fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+        background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+        whiteSpace: 'nowrap', cursor: onClick ? 'pointer' : 'default',
+        lineHeight: '16px', display: 'inline-block',
+      }}
+    >
+      {s.label}{qty ? `: ${qty}` : ''}
+    </span>
+  );
+}
+
+export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, groupBy, bulkMode, isSelected, onToggleSelect, onIssueBadgeClick }) {
   const status = getItemStatus(item);
   const today = new Date().toISOString().slice(0, 10);
   const isOverdue = status === "overdue";
@@ -54,13 +77,28 @@ export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, grou
           {showQtyCol && <span>Ord: {item.qtyOrdered || "---"}</span>}
           <span>Rec: {item.qtyReceived || "---"}</span>
           {item.delDate && <span>{isToday ? <span style={{color: C.blue, fontWeight: 700}}>TODAY</span> : item.delDate}</span>}
-          <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
+          <div style={{ display: "flex", gap: 3, marginLeft: "auto", alignItems: "center" }}>
             {issueIcon(item.damaged, item.damageReported, item.damageResolved, '🔴', 'Damaged')}
             {issueIcon(item.missingParts, item.missingPartsReported, item.missingPartsResolved, '⚠️', 'Missing Parts')}
             {issueIcon(item.additionalOrders, item.additionalOrdersReported, item.additionalOrdersResolved, '📦', 'Additional Orders')}
             {item.hasPhoto && <span>📷</span>}
           </div>
         </div>
+
+        {/* Issue qty badges (mobile) */}
+        {(item.damaged || item.missingParts || item.additionalOrders) && (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+            {item.damaged && (
+              <IssueBadge type="damaged" qty={item.damagedQty} onClick={onIssueBadgeClick ? (e) => { e.stopPropagation(); onIssueBadgeClick(item.id, 'damaged'); } : undefined} />
+            )}
+            {item.missingParts && (
+              <IssueBadge type="missing" qty={item.missingPartsQty} onClick={onIssueBadgeClick ? (e) => { e.stopPropagation(); onIssueBadgeClick(item.id, 'missing'); } : undefined} />
+            )}
+            {item.additionalOrders && (
+              <IssueBadge type="additional" qty={item.additionalOrdersQty} onClick={onIssueBadgeClick ? (e) => { e.stopPropagation(); onIssueBadgeClick(item.id, 'additional'); } : undefined} />
+            )}
+          </div>
+        )}
 
         {/* Section/vendor context */}
         {groupBy === "vendor" && item.section && (
@@ -156,11 +194,17 @@ export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, grou
         )}
       </span>
 
-      {/* Flags */}
-      <span style={{ display: "flex", gap: 3 }}>
-        {issueIcon(item.damaged, item.damageReported, item.damageResolved, '🔴', 'Damaged')}
-        {issueIcon(item.missingParts, item.missingPartsReported, item.missingPartsResolved, '⚠️', 'Missing Parts')}
-        {issueIcon(item.additionalOrders, item.additionalOrdersReported, item.additionalOrdersResolved, '📦', 'Additional Orders')}
+      {/* Flags + issue qty badges */}
+      <span style={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
+        {item.damaged && (
+          <IssueBadge type="damaged" qty={item.damagedQty} onClick={onIssueBadgeClick ? (e) => { e.stopPropagation(); onIssueBadgeClick(item.id, 'damaged'); } : undefined} />
+        )}
+        {item.missingParts && (
+          <IssueBadge type="missing" qty={item.missingPartsQty} onClick={onIssueBadgeClick ? (e) => { e.stopPropagation(); onIssueBadgeClick(item.id, 'missing'); } : undefined} />
+        )}
+        {item.additionalOrders && (
+          <IssueBadge type="additional" qty={item.additionalOrdersQty} onClick={onIssueBadgeClick ? (e) => { e.stopPropagation(); onIssueBadgeClick(item.id, 'additional'); } : undefined} />
+        )}
         {item.hasPhoto && <span style={{ fontSize: 11 }}>📷</span>}
       </span>
 

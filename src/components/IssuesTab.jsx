@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { C, TF, MF } from '../tokens';
 import { Btn } from './ui';
 import { useMobile } from '../hooks/useApi';
@@ -70,6 +70,24 @@ function buildIssueShareText(job, item, issueType) {
 
 function IssueRow({ item, issueType, details, qty, status, reportedDate, resolvedDate, job, onUpdate, isMobile }) {
   const { toast } = useToast();
+  const [localQty, setLocalQty] = useState(qty || '');
+  const [savedIndicator, setSavedIndicator] = useState(false);
+
+  const qtyField = issueType === 'missing' ? 'missingPartsQty'
+    : issueType === 'order' ? 'additionalOrdersQty'
+    : 'damagedQty';
+
+  const handleQtyChange = async (newVal) => {
+    setLocalQty(newVal);
+    try {
+      await api.updateItem(item.id, { ...item, [qtyField]: newVal });
+      setSavedIndicator(true);
+      setTimeout(() => setSavedIndicator(false), 1500);
+      onUpdate();
+    } catch (err) {
+      toast.error('Qty save failed: ' + err.message);
+    }
+  };
 
   const handleMarkReported = async () => {
     const field = issueType === 'missing' ? 'missingPartsReported'
@@ -148,16 +166,29 @@ function IssueRow({ item, issueType, details, qty, status, reportedDate, resolve
         }}>
           {item.description || '---'}
         </span>
-        {qty && (
-          <span style={{
-            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
-            background: C.accentDim || 'rgba(34,211,238,0.1)', color: C.accent,
-            border: `1px solid ${C.accentBorder || 'rgba(34,211,238,0.2)'}`,
-            whiteSpace: 'nowrap', fontFamily: 'inherit',
-          }}>
-            Qty: {qty}
-          </span>
-        )}
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 10, fontWeight: 700, borderRadius: 4,
+          background: C.accentDim || 'rgba(34,211,238,0.1)', color: C.accent,
+          border: `1px solid ${C.accentBorder || 'rgba(34,211,238,0.2)'}`,
+          whiteSpace: 'nowrap', fontFamily: 'inherit', padding: '2px 4px 2px 7px',
+        }}>
+          Qty:
+          <input
+            type="number" min="0" value={localQty}
+            onClick={e => e.stopPropagation()}
+            onChange={e => handleQtyChange(e.target.value)}
+            style={{
+              width: 44, padding: '1px 4px', fontSize: 11, fontWeight: 700,
+              borderRadius: 3, border: `1px solid ${C.border}`,
+              background: C.bg, color: C.accent, fontFamily: 'inherit',
+              outline: 'none', textAlign: 'center',
+            }}
+          />
+          {savedIndicator && (
+            <span style={{ fontSize: 9, color: C.green, fontWeight: 700 }}>Saved</span>
+          )}
+        </span>
         {item.section && (
           <span style={{ fontSize: 10, color: C.faint }}>
             {item.section}

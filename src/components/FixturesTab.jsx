@@ -11,6 +11,78 @@ import VirtualList from './VirtualList';
 import { api } from '../api';
 import { useToast } from './Toast';
 
+// ─── Inline Issue Editor ────────────────────────────────────────────────────
+function InlineIssueEditor({ item, issueType, onSave, onCancel }) {
+  const FIELDS = {
+    damaged: { qtyField: 'damagedQty', descField: 'damageNotes', label: 'Damaged', color: C.red, bg: C.redDim, border: C.redBorder },
+    missing: { qtyField: 'missingPartsQty', descField: 'missingParts', label: 'Missing Parts', color: C.yellow, bg: C.yellowDim, border: C.yellowBorder },
+    additional: { qtyField: 'additionalOrdersQty', descField: 'additionalOrders', label: 'Additional Orders', color: C.blue, bg: C.blueDim, border: C.blueBorder },
+  };
+  const f = FIELDS[issueType];
+  const [qty, setQty] = useState(item[f.qtyField] || '');
+  const [desc, setDesc] = useState(item[f.descField] || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(item.id, { ...item, [f.qtyField]: qty, [f.descField]: desc });
+    setSaving(false);
+  };
+
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      padding: '10px 14px', margin: '0 14px 4px',
+      background: f.bg, border: `1px solid ${f.border}`, borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: f.color, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {f.label} — {item.itemNumber || '---'}
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <label style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Qty</label>
+          <input
+            type="number" min="0" value={qty}
+            onChange={e => setQty(e.target.value)}
+            style={{
+              width: 60, padding: '5px 8px', fontSize: 12, borderRadius: 5,
+              border: `1px solid ${C.border}`, background: C.bg, color: C.text,
+              fontFamily: 'inherit', outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 140 }}>
+          <label style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: 'uppercase' }}>Description</label>
+          <input
+            type="text" value={desc}
+            onChange={e => setDesc(e.target.value)}
+            placeholder="Details..."
+            style={{
+              width: '100%', padding: '5px 8px', fontSize: 12, borderRadius: 5,
+              border: `1px solid ${C.border}`, background: C.bg, color: C.text,
+              fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button disabled={saving} onClick={handleSave} style={{
+            padding: '5px 14px', fontSize: 11, fontWeight: 700, borderRadius: 5, cursor: 'pointer',
+            background: f.color, color: '#fff', border: 'none', fontFamily: 'inherit',
+            opacity: saving ? 0.6 : 1,
+          }}>
+            {saving ? '...' : 'Save'}
+          </button>
+          <button onClick={onCancel} style={{
+            padding: '5px 10px', fontSize: 11, fontWeight: 700, borderRadius: 5, cursor: 'pointer',
+            background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, fontFamily: 'inherit',
+          }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FixturesTab({ job, onRefresh }) {
   const { toast, confirm: toastConfirm } = useToast();
   const [editItem, setEditItem] = useState(null); // null = closed, {} = new, item = editing
@@ -34,6 +106,7 @@ export default function FixturesTab({ job, onRefresh }) {
   const [sectionNicknames, setSectionNicknames] = useState({});
   const [editingNickname, setEditingNickname] = useState(null); // group name being edited
   const [nicknameInput, setNicknameInput] = useState("");
+  const [editingIssue, setEditingIssue] = useState(null); // { itemId, issueType }
 
   // Load section nicknames from localStorage on mount / job change
   useEffect(() => {
@@ -274,6 +347,21 @@ export default function FixturesTab({ job, onRefresh }) {
       setEditItem(item);
     }
   };
+
+  const handleIssueBadgeClick = useCallback((itemId, issueType) => {
+    setEditingIssue(prev => (prev && prev.itemId === itemId && prev.issueType === issueType) ? null : { itemId, issueType });
+  }, []);
+
+  const handleInlineIssueSave = useCallback(async (itemId, updatedData) => {
+    try {
+      await api.updateItem(itemId, updatedData);
+      setEditingIssue(null);
+      onRefresh();
+      toast.success("Issue updated");
+    } catch (err) {
+      toast.error("Update failed: " + err.message);
+    }
+  }, [onRefresh, toast]);
 
   const toggleQuickReportSelect = useCallback((id) => {
     setQuickReportSelected(prev => {
@@ -1011,7 +1099,16 @@ export default function FixturesTab({ job, onRefresh }) {
                   bulkMode={bulkMode || quickReportMode}
                   isSelected={quickReportMode ? quickReportSelected.has(entry.id) : selectedIds.has(entry.id)}
                   onToggleSelect={quickReportMode ? toggleQuickReportSelect : toggleSelect}
+                  onIssueBadgeClick={handleIssueBadgeClick}
                 />
+                {editingIssue && editingIssue.itemId === entry.id && (
+                  <InlineIssueEditor
+                    item={entry}
+                    issueType={editingIssue.issueType}
+                    onSave={handleInlineIssueSave}
+                    onCancel={() => setEditingIssue(null)}
+                  />
+                )}
                 {quickReceiveId === entry.id && !bulkMode && !quickReportMode && (
                   <QuickReceive
                     item={entry}
@@ -1094,8 +1191,17 @@ export default function FixturesTab({ job, onRefresh }) {
                         bulkMode={bulkMode || quickReportMode}
                         isSelected={quickReportMode ? quickReportSelected.has(item.id) : selectedIds.has(item.id)}
                         onToggleSelect={quickReportMode ? toggleQuickReportSelect : toggleSelect}
+                        onIssueBadgeClick={handleIssueBadgeClick}
                       />
                     </div>
+                    {editingIssue && editingIssue.itemId === item.id && (
+                      <InlineIssueEditor
+                        item={item}
+                        issueType={editingIssue.issueType}
+                        onSave={handleInlineIssueSave}
+                        onCancel={() => setEditingIssue(null)}
+                      />
+                    )}
                     {quickReceiveId === item.id && !bulkMode && !quickReportMode && (
                       <QuickReceive
                         item={item}
