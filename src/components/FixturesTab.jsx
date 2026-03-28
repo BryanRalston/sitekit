@@ -96,6 +96,7 @@ export default function FixturesTab({ job, onRefresh }) {
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(true);
   const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week" | "received-today"
   const [issuesFilter, setIssuesFilter] = useState(false); // show only unreported issues
@@ -502,14 +503,28 @@ export default function FixturesTab({ job, onRefresh }) {
 
   return (
     <>
-      {/* Job Dashboard Cards */}
+      {/* Job Dashboard Cards — collapsible */}
       {items.length > 0 && (
-        <div className="no-print" style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr",
-          gap: 10, padding: isMobile ? "10px 14px" : "12px 18px",
-          background: C.card, borderBottom: `1px solid ${C.border}`, flexShrink: 0,
-        }}>
+        <div className="no-print" style={{ background: C.card, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+          <button onClick={() => setShowDashboard(v => !v)} style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            padding: "6px 14px", background: "transparent", border: "none", cursor: "pointer",
+            color: C.muted, fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+            fontFamily: "inherit",
+          }}>
+            <span style={{ transition: "transform 0.15s", transform: showDashboard ? "rotate(0)" : "rotate(-90deg)", fontSize: 8 }}>▼</span>
+            Dashboard
+            {!showDashboard && (deliveryStats.overdue > 0 || unreportedIssues.length > 0) && (
+              <span style={{ background: C.red, color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 9, fontWeight: 700 }}>
+                {deliveryStats.overdue + unreportedIssues.length}
+              </span>
+            )}
+          </button>
+          {showDashboard && <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr",
+            gap: 10, padding: isMobile ? "0 14px 10px" : "0 18px 12px",
+          }}>
           {/* Overdue */}
           <button onClick={() => { setDeliveryFilter(deliveryFilter === "overdue" ? null : "overdue"); setIssuesFilter(false); }} style={{
             padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
@@ -569,6 +584,7 @@ export default function FixturesTab({ job, onRefresh }) {
               Received Today
             </div>
           </button>
+        </div>}
         </div>
       )}
 
