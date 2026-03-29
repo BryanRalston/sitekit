@@ -147,26 +147,60 @@ function AppInner() {
     }).catch(() => {});
   }, [unlocked, loading]);
 
-  // Auto-backup reminder (after unlock)
+  // Auto-backup reminder banner (after unlock)
+  const [showBackupBanner, setShowBackupBanner] = useState(false);
+  const [backupDaysSince, setBackupDaysSince] = useState(0);
+
   useEffect(() => {
     if (!unlocked || loading) return;
     (async () => {
       try {
+        // Check snooze first
+        const snoozedUntil = localStorage.getItem('sitekit_backup_snooze');
+        if (snoozedUntil && Date.now() < parseInt(snoozedUntil, 10)) return;
+
         const config = await getOne('config', 'last_backup_date');
         if (!config) {
-          // Never backed up — prompt after first job is created
+          // Never backed up — show banner if jobs exist
           if (jobs.length > 0) {
-            toast.info("Back up your data regularly. Tap the Backup button in the sidebar.", { duration: 8000 });
+            setBackupDaysSince(-1); // -1 = never
+            setShowBackupBanner(true);
           }
         } else {
-          const daysSince = (Date.now() - new Date(config.value).getTime()) / (1000 * 60 * 60 * 24);
-          if (daysSince > 7) {
-            toast.warning("It's been " + Math.floor(daysSince) + " days since your last backup.", { duration: 8000 });
+          const days = (Date.now() - new Date(config.value).getTime()) / (1000 * 60 * 60 * 24);
+          if (days > 7) {
+            setBackupDaysSince(Math.floor(days));
+            setShowBackupBanner(true);
           }
         }
       } catch (_) {}
     })();
   }, [unlocked, loading, jobs.length]);
+
+  const handleBackupFromBanner = async () => {
+    try {
+      const data = await api.exportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sitekit-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Backup downloaded");
+      try { await put('config', { key: 'last_backup_date', value: new Date().toISOString() }); } catch (_) {}
+      localStorage.setItem('sitekit_last_backup', Date.now().toString());
+      setShowBackupBanner(false);
+    } catch (err) {
+      toast.error('Backup failed: ' + err.message);
+    }
+  };
+
+  const handleBackupSnooze = () => {
+    // Dismiss for 1 day
+    localStorage.setItem('sitekit_backup_snooze', (Date.now() + 24 * 60 * 60 * 1000).toString());
+    setShowBackupBanner(false);
+  };
 
   // Ctrl+K / Cmd+K keyboard shortcut for global search
   useEffect(() => {
@@ -531,6 +565,41 @@ function AppInner() {
             try { await put('config', { key: 'tutorial_completed', value: true }); } catch (_) {}
           }}
         />
+      )}
+
+      {/* Backup Reminder Banner */}
+      {showBackupBanner && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 900,
+          padding: '12px 20px',
+          background: 'linear-gradient(135deg, rgba(20,16,12,0.97) 0%, rgba(30,22,14,0.97) 100%)',
+          borderTop: '2px solid rgba(245,158,11,0.4)',
+          display: 'flex', alignItems: 'center', gap: 12,
+          flexWrap: 'wrap', justifyContent: 'center',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
+        }}>
+          <span style={{ fontSize: 18 }}>💾</span>
+          <span style={{ fontSize: 13, color: '#f5f5f5', fontWeight: 600 }}>
+            {backupDaysSince === -1
+              ? "You haven't backed up your data yet. Back up now?"
+              : `It's been ${backupDaysSince} days since your last backup. Back up now?`}
+          </span>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+            <button onClick={handleBackupSnooze} style={{
+              background: 'transparent', border: `1px solid rgba(255,255,255,0.15)`,
+              borderRadius: 6, color: 'rgba(255,255,255,0.5)', cursor: 'pointer',
+              fontSize: 12, fontWeight: 600, padding: '6px 14px', fontFamily: 'inherit',
+              minHeight: 34,
+            }}>Remind Later</button>
+            <button onClick={handleBackupFromBanner} style={{
+              background: 'rgba(245,158,11,0.9)', border: 'none',
+              borderRadius: 6, color: '#1a1a1a', cursor: 'pointer',
+              fontSize: 12, fontWeight: 700, padding: '6px 16px', fontFamily: 'inherit',
+              minHeight: 34,
+            }}>Back Up</button>
+          </div>
+        </div>
       )}
 
       {/* Feedback Widget */}

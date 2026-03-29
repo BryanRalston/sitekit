@@ -185,6 +185,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       toast.success("Backup downloaded");
       // Track backup date for reminder system
       try { await put('config', { key: 'last_backup_date', value: new Date().toISOString() }); } catch (_) {}
+      localStorage.setItem('sitekit_last_backup', Date.now().toString());
     } catch (err) {
       toast.error('Export failed: ' + err.message);
     }

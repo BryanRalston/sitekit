@@ -10,6 +10,7 @@ import ReportModal from './ReportModal';
 import VirtualList from './VirtualList';
 import { api } from '../api';
 import { useToast } from './Toast';
+import { haptic } from '../utils/haptic';
 
 // ─── Inline Issue Editor ────────────────────────────────────────────────────
 function InlineIssueEditor({ item, issueType, onSave, onCancel }) {
@@ -350,6 +351,7 @@ export default function FixturesTab({ job, onRefresh }) {
   };
 
   const handleIssueBadgeClick = useCallback((itemId, issueType) => {
+    haptic();
     setEditingIssue(prev => (prev && prev.itemId === itemId && prev.issueType === issueType) ? null : { itemId, issueType });
   }, []);
 

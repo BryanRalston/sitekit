@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { C, MF } from '../tokens';
 import { Btn } from './ui';
+import { haptic } from '../utils/haptic';
 
 export default function QuickReceive({ item, onSave, onCancel, onOpenModal }) {
   const [qty, setQty] = useState(item.qtyReceived || item.qtyOrdered || "");
@@ -9,6 +10,7 @@ export default function QuickReceive({ item, onSave, onCancel, onOpenModal }) {
   const hasIssues = !!(item.missingParts || item.damaged || item.additionalOrders);
 
   const handleSave = () => {
+    haptic();
     onSave({
       qtyReceived: parseInt(qty) || 0,
       dateReceived: date,

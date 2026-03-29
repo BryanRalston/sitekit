@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { C } from '../tokens';
+import { haptic } from '../utils/haptic';
 
 const TOAST_TYPES = {
   success: { color: C.green, icon: '\u2713', border: C.greenBorder, bg: C.greenDim },
@@ -192,6 +193,7 @@ export function ToastProvider({ children }) {
      * @param {number} timeout - ms before real delete (default 5000)
      */
     undo: (message, undoCallback, deleteCallback, timeout = 5000) => {
+      haptic();
       const id = nextId++;
       // Set timer for the real delete
       undoTimersRef.current[id] = setTimeout(() => {

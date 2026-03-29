@@ -4,6 +4,7 @@ import { Btn } from './ui';
 import { useMobile } from '../hooks/useApi';
 import { api } from '../api';
 import { useToast } from './Toast';
+import { haptic } from '../utils/haptic';
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ function IssueRow({ item, issueType, details, qty, status, reportedDate, resolve
     setLocalQty(newVal);
     try {
       await api.updateItem(item.id, { ...item, [qtyField]: newVal });
+      haptic();
       setSavedIndicator(true);
       setTimeout(() => setSavedIndicator(false), 1500);
       onUpdate();
