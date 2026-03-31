@@ -144,23 +144,22 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
   const fileRef = useRef(null);
   const sheetRef = useRef(null);
 
-  // Determine step indices based on whether item is prefilled
-  // Flow: photo -> issueType -> item (skipped if prefilled) -> details
+  // Flow: issueType -> item (skipped if prefilled) -> details (photo optional here)
   const getStepIndex = useCallback((stepName) => {
     if (prefilledItem) {
-      // Steps: photo(0), issueType(1), details(2)
-      const map = { photo: 0, issueType: 1, details: 2 };
+      // Steps: issueType(0), details(1)
+      const map = { issueType: 0, details: 1 };
       return map[stepName] ?? 0;
     }
-    // Steps: photo(0), issueType(1), item(2), details(3)
-    const map = { photo: 0, issueType: 1, item: 2, details: 3 };
+    // Steps: issueType(0), item(1), details(2)
+    const map = { issueType: 0, item: 1, details: 2 };
     return map[stepName] ?? 0;
   }, [prefilledItem]);
 
-  const totalSteps = prefilledItem ? 3 : 4;
+  const totalSteps = prefilledItem ? 2 : 3;
 
   // State
-  const [step, setStep] = useState(0); // always start at photo
+  const [step, setStep] = useState(0); // start at issue type
   const [issueType, setIssueType] = useState(null); // 'damaged' | 'missing' | 'order'
   const [photoData, setPhotoData] = useState(null); // base64 compressed image
   const [photoFile, setPhotoFile] = useState(null); // raw File for upload
@@ -178,14 +177,7 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
     requestAnimationFrame(() => setSheetVisible(true));
   }, []);
 
-  // Auto-trigger camera on first step (photo first)
-  useEffect(() => {
-    if (step === 0 && fileRef.current) {
-      // Small delay so sheet animation finishes
-      const t = setTimeout(() => fileRef.current?.click(), 300);
-      return () => clearTimeout(t);
-    }
-  }, [step]);
+  // No auto-camera — user picks issue type first
 
   // Search items
   const searchResults = useMemo(() => {
@@ -207,17 +199,10 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
       const compressed = await compressImage(file, 1200, 0.75);
       setPhotoData(compressed);
       haptic();
-      // Advance to issue type selection
-      setStep(getStepIndex('issueType'));
     } catch (err) {
       toast.error('Failed to process photo');
     }
-  }, [toast, getStepIndex]);
-
-  const handleSkipPhoto = useCallback(() => {
-    haptic();
-    setStep(getStepIndex('issueType'));
-  }, [getStepIndex]);
+  }, [toast]);
 
   const handleSelectIssueType = useCallback((type) => {
     haptic();
@@ -297,66 +282,12 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
 
   // Step labels for progress indicator
   const stepLabels = prefilledItem
-    ? ['Photo', 'Type', 'Details']
-    : ['Photo', 'Type', 'Item', 'Details'];
+    ? ['Type', 'Details']
+    : ['Type', 'Item', 'Details'];
 
   // Step content
   const renderStep = () => {
-    // Step 0: Photo (always first)
-    if (step === getStepIndex('photo')) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', padding: '20px 0' }}>
-          <div style={{ fontSize: 40 }}>📸</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text, textAlign: 'center' }}>
-            Take a photo of the issue
-          </div>
-          <div style={{ fontSize: 12, color: C.muted, textAlign: 'center' }}>
-            Photo helps vendors process claims faster
-          </div>
-
-          {photoData && (
-            <div style={{
-              width: '100%', maxWidth: 280, borderRadius: 10, overflow: 'hidden',
-              border: `2px solid ${C.greenBorder}`, position: 'relative',
-            }}>
-              <img src={photoData} alt="Issue" style={{ width: '100%', display: 'block' }} />
-              <div style={{
-                position: 'absolute', top: 8, right: 8,
-                background: 'rgba(22,163,74,0.9)', color: '#fff',
-                borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700,
-              }}>
-                Captured
-              </div>
-            </div>
-          )}
-
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handlePhotoCapture}
-            style={{ display: 'none' }}
-          />
-
-          <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-            <Btn variant="ghost" onClick={handleSkipPhoto} style={{ flex: 1, minHeight: 44 }}>
-              Skip Photo
-            </Btn>
-            <Btn variant="primary" icon="📷" onClick={() => fileRef.current?.click()} style={{ flex: 1, minHeight: 44 }}>
-              {photoData ? 'Retake' : 'Take Photo'}
-            </Btn>
-          </div>
-          {photoData && (
-            <Btn variant="green" onClick={() => setStep(getStepIndex('issueType'))} style={{ width: '100%', minHeight: 44 }}>
-              Next — Select Issue Type
-            </Btn>
-          )}
-        </div>
-      );
-    }
-
-    // Step: Issue Type Selection
+    // Step 0: Issue Type Selection (first step)
     if (step === getStepIndex('issueType')) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -373,11 +304,6 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
                 onSelect={handleSelectIssueType}
               />
             ))}
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Btn variant="ghost" onClick={() => setStep(getStepIndex('photo'))} style={{ flex: 1, minHeight: 44 }}>
-              Back
-            </Btn>
           </div>
         </div>
       );
@@ -477,15 +403,21 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
             </button>
           </div>
 
-          {/* Photo preview if captured */}
-          {photoData && (
-            <div style={{
-              width: 80, height: 80, borderRadius: 8, overflow: 'hidden',
-              border: `1px solid ${C.border}`, flexShrink: 0,
-            }}>
-              <img src={photoData} alt="Issue" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-          )}
+          {/* Photo — capture or preview */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {photoData && (
+              <div style={{
+                width: 70, height: 70, borderRadius: 8, overflow: 'hidden',
+                border: `1px solid ${C.border}`, flexShrink: 0,
+              }}>
+                <img src={photoData} alt="Issue" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoCapture} style={{ display: 'none' }} />
+            <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current?.click()}>
+              {photoData ? 'Replace Photo' : 'Add Photo'}
+            </Btn>
+          </div>
 
           {/* Qty */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
