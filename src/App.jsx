@@ -147,8 +147,8 @@ function PwaInstallBanner() {
   return (
     <div style={{
       padding: '8px 16px',
-      background: 'linear-gradient(135deg, rgba(45,212,191,0.12) 0%, rgba(45,212,191,0.06) 100%)',
-      borderBottom: `1px solid ${C.tealBorder}`,
+      background: C.subtleBg,
+      borderBottom: `1px solid ${C.border}`,
       display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
       justifyContent: 'center', flexShrink: 0,
     }}>
@@ -162,7 +162,7 @@ function PwaInstallBanner() {
           padding: '4px 10px', fontFamily: 'inherit', minHeight: 30,
         }}>Not Now</button>
         <button onClick={handleInstall} style={{
-          background: C.teal, border: 'none', borderRadius: 5,
+          background: C.accent, border: 'none', borderRadius: 5,
           color: '#0d1117', cursor: 'pointer', fontSize: 11, fontWeight: 700,
           padding: '4px 12px', fontFamily: 'inherit', minHeight: 30,
         }}>Install</button>
@@ -546,7 +546,7 @@ function AppInner() {
                   padding: "16px 20px", background: C.card, borderRadius: 12,
                   border: `1px solid ${C.border}`, textAlign: "left"
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.teal, marginBottom: 6 }}>Step 2: Import Fixtures</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Step 2: Import Fixtures</div>
                   <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
                     Upload your Assembly Detail PDF. SiteKit parses it automatically
                     — vendors, sections, quantities, fixture books, delivery dates.
@@ -557,7 +557,7 @@ function AppInner() {
                   padding: "16px 20px", background: C.card, borderRadius: 12,
                   border: `1px solid ${C.border}`, textAlign: "left"
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 6 }}>Step 3: Track on the Jobsite</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Step 3: Track on the Jobsite</div>
                   <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
                     Mark items received, flag missing parts, document damage
                     with photos, and generate reports for the project manager.

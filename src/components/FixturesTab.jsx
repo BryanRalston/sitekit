@@ -532,8 +532,8 @@ export default function FixturesTab({ job, onRefresh }) {
           <button onClick={() => { setDeliveryFilter(deliveryFilter === "overdue" ? null : "overdue"); setIssuesFilter(false); }} style={{
             padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
             textAlign: "center", transition: "all 0.15s", border: "none",
-            background: deliveryFilter === "overdue" ? C.redDim : `rgba(248,81,73,0.06)`,
-            outline: deliveryFilter === "overdue" ? `2px solid ${C.redBorder}` : "2px solid transparent",
+            background: deliveryFilter === "overdue" ? C.redDim : C.subtleBg,
+            outline: deliveryFilter === "overdue" ? `2px solid ${C.redBorder}` : `1px solid ${C.borderLight}`,
           }}>
             <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: deliveryStats.overdue > 0 ? C.red : C.faint, lineHeight: 1 }}>
               {deliveryStats.overdue}
@@ -547,8 +547,8 @@ export default function FixturesTab({ job, onRefresh }) {
           <button onClick={() => { setDeliveryFilter(deliveryFilter === "week" ? null : "week"); setIssuesFilter(false); }} style={{
             padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
             textAlign: "center", transition: "all 0.15s", border: "none",
-            background: deliveryFilter === "week" ? C.blueDim : `rgba(88,166,255,0.06)`,
-            outline: deliveryFilter === "week" ? `2px solid ${C.blueBorder}` : "2px solid transparent",
+            background: deliveryFilter === "week" ? C.blueDim : C.subtleBg,
+            outline: deliveryFilter === "week" ? `2px solid ${C.blueBorder}` : `1px solid ${C.borderLight}`,
           }}>
             <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: deliveryStats.thisWeek > 0 ? C.blue : C.faint, lineHeight: 1 }}>
               {deliveryStats.thisWeek}
@@ -562,8 +562,8 @@ export default function FixturesTab({ job, onRefresh }) {
           <button onClick={() => { setIssuesFilter(!issuesFilter); setDeliveryFilter(null); }} style={{
             padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
             textAlign: "center", transition: "all 0.15s", border: "none",
-            background: issuesFilter ? C.accentDim : `rgba(249,115,22,0.06)`,
-            outline: issuesFilter ? `2px solid ${C.accentBorder}` : "2px solid transparent",
+            background: issuesFilter ? C.accentDim : C.subtleBg,
+            outline: issuesFilter ? `2px solid ${C.accentBorder}` : `1px solid ${C.borderLight}`,
           }}>
             <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: unreportedIssues.length > 0 ? C.accent : C.faint, lineHeight: 1 }}>
               {unreportedIssues.length}
@@ -577,8 +577,8 @@ export default function FixturesTab({ job, onRefresh }) {
           <button onClick={() => { setDeliveryFilter(deliveryFilter === "received-today" ? null : "received-today"); setIssuesFilter(false); }} style={{
             padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
             textAlign: "center", transition: "all 0.15s", border: "none",
-            background: deliveryFilter === "received-today" ? C.greenDim : `rgba(63,185,80,0.06)`,
-            outline: deliveryFilter === "received-today" ? `2px solid ${C.greenBorder}` : "2px solid transparent",
+            background: deliveryFilter === "received-today" ? C.greenDim : C.subtleBg,
+            outline: deliveryFilter === "received-today" ? `2px solid ${C.greenBorder}` : `1px solid ${C.borderLight}`,
           }}>
             <div style={{ ...MF, fontSize: 26, fontWeight: 700, color: deliveryStats.receivedToday > 0 ? C.green : C.faint, lineHeight: 1 }}>
               {deliveryStats.receivedToday}

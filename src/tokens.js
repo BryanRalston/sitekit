@@ -30,6 +30,8 @@ export const C = {
   teal: "#2dd4bf",
   tealDim: "rgba(45,212,191,0.12)",
   tealBorder: "rgba(45,212,191,0.3)",
+  sectionLabel: "#8b949e",
+  subtleBg: "rgba(255,255,255,0.03)",
 };
 
 export const TF = { fontFamily: "'Rajdhani', sans-serif" };

@@ -356,7 +356,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
                   </div>
                   <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
                     <span style={{ fontSize: 10, color: C.muted }}>{itemCount} items</span>
-                    {sectionCount > 0 && <span style={{ fontSize: 10, color: C.teal }}>📂 {sectionCount} sections</span>}
+                    {sectionCount > 0 && <span style={{ fontSize: 10, color: C.muted }}>📂 {sectionCount} sections</span>}
                     {issueCount > 0 && <span style={{ fontSize: 10, color: C.red, fontWeight: 700 }}>⚠ {issueCount}</span>}
                     {photoCount > 0 && <span style={{ fontSize: 10, color: C.muted }}>📷 {donePhotos}/{photoCount}</span>}
                   </div>

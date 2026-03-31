@@ -221,7 +221,8 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
 
         {/* Fixture Information */}
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.accent, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.sectionLabel, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 3, height: 12, borderRadius: 2, background: C.sectionLabel, flexShrink: 0 }} />
             Fixture Information
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -252,7 +253,8 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
 
         {/* Reference Photo */}
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.teal, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.sectionLabel, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 3, height: 12, borderRadius: 2, background: C.sectionLabel, flexShrink: 0 }} />
             Reference Photo
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -272,7 +274,8 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
 
         {/* Receiving */}
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.blue, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.sectionLabel, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 3, height: 12, borderRadius: 2, background: C.sectionLabel, flexShrink: 0 }} />
             Receiving
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -283,7 +286,8 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
 
         {/* Issues */}
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.red, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.sectionLabel, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 3, height: 12, borderRadius: 2, background: C.sectionLabel, flexShrink: 0 }} />
             Issues
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
