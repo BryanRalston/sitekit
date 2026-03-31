@@ -1127,7 +1127,7 @@ export default function FixturesTab({ job, onRefresh }) {
             const flat = [];
             for (const [grp, gitems] of Object.entries(grouped)) {
               flat.push({ _type: 'header', _group: grp, _count: gitems.length });
-              if (!!expandedGroups.has(grp)) {
+              if (search.trim() || expandedGroups.has(grp)) {
                 for (let idx = 0; idx < gitems.length; idx++) {
                   flat.push({ _type: 'item', _itemIdx: idx, ...gitems[idx] });
                 }
@@ -1140,7 +1140,7 @@ export default function FixturesTab({ job, onRefresh }) {
           containerStyle={{ flex: 1 }}
           renderItem={(entry, i) => {
             if (entry._type === 'header') {
-              const isCollapsed = !expandedGroups.has(entry._group);
+              const isCollapsed = search.trim() ? false : !expandedGroups.has(entry._group);
               const nickname = sectionNicknames[entry._group];
               const displayName = nickname || entry._group;
               return (
@@ -1234,7 +1234,7 @@ export default function FixturesTab({ job, onRefresh }) {
         /* ── Standard rendering for small lists ── */
         <div data-tutorial="fixture-list" style={{ flex: 1, overflowY: "auto" }}>
           {Object.entries(grouped).map(([grp, gitems]) => {
-            const isCollapsed = !expandedGroups.has(grp);
+            const isCollapsed = search.trim() ? false : !expandedGroups.has(grp);
             const nickname = sectionNicknames[grp];
             const displayName = nickname || grp;
             return (
