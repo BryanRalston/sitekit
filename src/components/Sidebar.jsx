@@ -288,11 +288,15 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       width: 252, background: C.sidebar, borderRight: `1px solid ${C.border}`,
       display: "flex", flexDirection: "column", flexShrink: 0, height: "100%"
     }}>
-      {/* Logo — 5 rapid taps opens admin feedback viewer */}
+      {/* Logo — tap to go Home; 5 rapid taps opens admin feedback viewer */}
       <div style={{ padding: "17px 16px 13px", borderBottom: `1px solid ${C.border}` }}>
         <div
-          onClick={handleLogoTap}
-          style={{ ...TF, fontSize: 23, fontWeight: 700, color: C.accent, cursor: 'default', userSelect: 'none' }}
+          onClick={() => {
+            handleLogoTap();
+            onSelectJob(null);
+            if (onCloseMobile) onCloseMobile();
+          }}
+          style={{ ...TF, fontSize: 23, fontWeight: 700, color: C.accent, cursor: 'pointer', userSelect: 'none' }}
         >
           SITE<span style={{ color: C.text }}>KIT</span>
         </div>

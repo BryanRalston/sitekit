@@ -18,6 +18,7 @@ import { api } from './api';
 import { useMobile } from './hooks/useApi';
 import { getOne, put } from './db';
 import JobOverview from './components/JobOverview';
+import HomeScreen from './components/HomeScreen';
 
 export default function App() {
   return (
@@ -260,12 +261,9 @@ function AppInner() {
     }
   }, []);
 
-  // Initial load
+  // Initial load — don't auto-select a job; HomeScreen shows first
   useEffect(() => {
-    loadJobs().then(data => {
-      if (data.length > 0 && !activeJobId) {
-        setActiveJobId(data[0].id);
-      }
+    loadJobs().then(() => {
       setLoading(false);
     });
   }, []);
@@ -477,7 +475,10 @@ function AppInner() {
           }}>
             ☰
           </button>
-          <div style={{ ...TF, fontSize: 18, fontWeight: 700, color: C.accent, flex: 1 }}>
+          <div
+            onClick={() => { setActiveJobId(null); setActiveTab("fixtures"); }}
+            style={{ ...TF, fontSize: 18, fontWeight: 700, color: C.accent, flex: 1, cursor: 'pointer' }}
+          >
             SITE<span style={{ color: C.text }}>KIT</span>
           </div>
           <button data-tutorial="global-search" onClick={() => setShowGlobalSearch(true)} style={{
@@ -509,76 +510,21 @@ function AppInner() {
         )}
 
         {!activeJobFull ? (
-          jobs.length > 0 ? (
-            /* Multi-job overview when jobs exist but none selected */
-            <JobOverview jobs={jobs} onSelectJob={handleSelectJob} />
-          ) : (
-            /* Welcome screen — no jobs exist yet */
-            <div style={{
-              flex: 1, display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: 20,
-              padding: "40px 24px", textAlign: "center"
-            }}>
-              <div style={{ ...TF, fontSize: 36, fontWeight: 700, color: C.accent, letterSpacing: "0.02em" }}>
-                SITE<span style={{ color: C.text }}>KIT</span>
-              </div>
-              <div style={{ fontSize: 14, color: C.muted, maxWidth: 420, lineHeight: 1.8 }}>
-                Your jobsite command center. Import fixture lists, track deliveries,
-                flag issues, and build a photo reference library that gets smarter with every job.
-              </div>
-
-              <div style={{
-                display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 340, marginTop: 8
-              }}>
-                <div style={{
-                  padding: "16px 20px", background: C.card, borderRadius: 12,
-                  border: `1px solid ${C.accentBorder}`, textAlign: "left"
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.accent, marginBottom: 6 }}>Step 1: Create a Job</div>
-                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                    {isMobile ? "Tap ☰ then " : "Click "}
-                    <strong style={{ color: C.text }}>+ New Job</strong> to set up your store remodel.
-                    Enter the store name, number, and location.
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: "16px 20px", background: C.card, borderRadius: 12,
-                  border: `1px solid ${C.border}`, textAlign: "left"
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Step 2: Import Fixtures</div>
-                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                    Upload your Assembly Detail PDF. SiteKit parses it automatically
-                    — vendors, sections, quantities, fixture books, delivery dates.
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: "16px 20px", background: C.card, borderRadius: 12,
-                  border: `1px solid ${C.border}`, textAlign: "left"
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Step 3: Track on the Jobsite</div>
-                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                    Mark items received, flag missing parts, document damage
-                    with photos, and generate reports for the project manager.
-                  </div>
-                </div>
-              </div>
-
-              <Btn variant="primary" size="lg" icon="+" onClick={() => setShowWelcomeNewJob(true)}
-                data-testid="get-started-btn"
-                style={{ marginTop: 8, minHeight: 50, fontSize: 16, padding: "12px 28px" }}>
-                Get Started
-              </Btn>
-
-              {showWelcomeNewJob && (
-                <NewJobModal
-                  onSave={(data) => { handleNewJob(data); setShowWelcomeNewJob(false); }}
-                  onClose={() => setShowWelcomeNewJob(false)}
-                />
-              )}
-            </div>
-          )
+          /* Home Screen — first view after PIN unlock */
+          <>
+            <HomeScreen
+              jobs={jobs}
+              onSelectJob={handleSelectJob}
+              onNewJob={() => setShowWelcomeNewJob(true)}
+              onBackup={handleBackupFromBanner}
+            />
+            {showWelcomeNewJob && (
+              <NewJobModal
+                onSave={(data) => { handleNewJob(data); setShowWelcomeNewJob(false); }}
+                onClose={() => setShowWelcomeNewJob(false)}
+              />
+            )}
+          </>
         ) : (
           <>
             {/* Job header + tabs */}
