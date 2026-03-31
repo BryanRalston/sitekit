@@ -250,6 +250,26 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
           </div>
         </div>
 
+        {/* Reference Photo */}
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.teal, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
+            Reference Photo
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {displayPhoto && (
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <img src={displayPhoto} alt="" style={{ maxWidth: 160, maxHeight: 120, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                <button onClick={removePhoto} style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 10 }}>✕</button>
+              </div>
+            )}
+            {uploading && <div style={{ color: C.muted, fontSize: 12 }}>Uploading...</div>}
+            <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }} onChange={handlePhoto} />
+            <Btn variant="ghost" size="sm" icon="📷" onClick={() => fileRef.current.click()}>
+              {displayPhoto ? "Replace" : "Add Photo"}
+            </Btn>
+          </div>
+        </div>
+
         {/* Receiving */}
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: C.blue, letterSpacing: "0.1em", marginBottom: 12, textTransform: "uppercase" }}>
