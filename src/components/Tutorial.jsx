@@ -4,156 +4,141 @@ import { getOne, put } from '../db';
 
 // ─── Tutorial Steps ─────────────────────────────────────────────────────────
 const STEPS = [
+  // ── Welcome ──
   {
-    id: 'welcome',
-    target: null,
+    id: 'welcome', target: null, fullScreen: true,
     title: 'Welcome to SiteKit!',
-    text: "Your jobsite command center. This quick tour shows you everything — from importing fixtures to tracking crew hours. Let's go!",
-    fullScreen: true,
+    text: "Your complete jobsite command center \u2014 fixtures, deliveries, photos, receipts, crew hours, and issue tracking. All offline, all on your phone. Let\u2019s walk through it.",
+  },
+
+  // ── Getting Started ──
+  {
+    id: 'new-job', target: 'new-job', interactive: true, triggerClick: true,
+    title: '1. Create a Job',
+    text: 'Every remodel starts here. Tap to create a job with the store name, number, and location. You can manage multiple jobs from the sidebar.',
   },
   {
-    id: 'new-job',
-    target: 'new-job',
-    title: 'Create a Job',
-    text: 'Every remodel starts here. Tap to create a job with the store name, number, and location.',
-    interactive: true,
-    triggerClick: true,
+    id: 'import', target: 'import', interactive: true, triggerClick: true,
+    title: '2. Import Your Fixture List',
+    text: 'Upload the Assembly Detail PDF. SiteKit parses vendors, item numbers, sections, quantities, and delivery dates \u2014 500+ items in seconds.',
+  },
+
+  // ── Fixtures Tab ──
+  {
+    id: 'fixture-list', target: 'fixture-list',
+    title: '3. Your Fixture List',
+    text: 'Fixtures organized by vendor or section. Tap any group header to collapse it. Tap the \u270F\uFE0F pencil to rename a section \u2014 "D-WALL-COSM-GND" becomes "Cosmetics Gondola".',
   },
   {
-    id: 'import',
-    target: 'import',
-    title: 'Import Fixtures',
-    text: 'Upload your Assembly Detail PDF. SiteKit parses vendors, sections, quantities, delivery dates — 500+ items in seconds.',
-    interactive: true,
-    triggerClick: true,
+    id: 'dashboard-cards', target: null,
+    title: '4. Dashboard Cards',
+    text: 'Tap "Dashboard" at the top to see what needs attention: overdue deliveries, arriving this week, unreported issues, and received today. Tap any card to filter your list instantly.',
   },
   {
-    id: 'fixture-list',
-    target: 'fixture-list',
-    title: 'Browse Fixtures',
-    text: 'Your fixtures organized by vendor or section. Full descriptions, quantities, and delivery dates visible on mobile.',
+    id: 'delivery-timeline', target: null,
+    title: '5. Delivery Timeline',
+    text: "Timeline pills show what\u2019s arriving each day this week. Tap a day to filter. When your PM asks \"When\u2019s the next delivery?\" \u2014 you\u2019ll know instantly.",
   },
   {
-    id: 'item-row',
-    target: 'item-row',
-    title: 'Quick Receive',
-    text: "See the \u2713 button on each item? Tap it to mark items received instantly \u2014 no need to open the full details. Enter quantity and date, done.",
+    id: 'item-row', target: 'item-row',
+    title: '6. Quick Receive',
+    text: 'Tap the \u2713 button on any item to mark it received right from the list \u2014 quantity and date, done. No need to open the full details for simple receives.',
   },
   {
-    id: 'status-filters',
-    target: 'status-filters',
-    title: 'Status Tracking',
-    text: 'Filter by Pending, Partial, Received, Overdue, or Issue. The delivery dashboard shows what\'s arriving today.',
+    id: 'ref-photo', target: null,
+    title: '7. Reference Photos',
+    text: 'Open any fixture item and snap a reference photo \u2014 it saves with the item for quick visual reference later. A \uD83D\uDCF7 icon shows on items that have photos.',
   },
   {
-    id: 'issues',
-    target: 'issues-badge',
-    title: 'Issue Communication',
-    text: 'Missing parts, damage, or need to reorder? Flag it, then Share to send a formatted report via text or email. SiteKit tracks what\'s been reported and what\'s resolved.',
+    id: 'status-filters', target: 'status-filters',
+    title: '8. Status Filters',
+    text: 'Filter by Pending, Partial, Received, Overdue, or Issue. Combine with search and section filters to find exactly what you need.',
+  },
+
+  // ── Issues ──
+  {
+    id: 'issues', target: 'issues-badge',
+    title: '9. Flag Issues',
+    text: 'Missing parts, damage, or need to reorder? Flag it with a description, quantity, and photo. Tap the colored badges on any item row to edit issues inline \u2014 no modal needed.',
   },
   {
-    id: 'tab-visual',
-    target: 'tab-visual',
-    title: 'Photo Reference',
-    text: 'The Department tab \u2014 document installations by department with photos. Mark photos as Reference to build a visual playbook across jobs.',
-    interactive: true,
-    triggerClick: true,
+    id: 'quick-report', target: null,
+    title: '10. Quick Report',
+    text: 'Need to report multiple issues at once? Tap Quick Report in the toolbar, select the items, and generate one formatted message for your PM. One tap to share via text or email.',
   },
   {
-    id: 'tab-issues',
-    target: 'tab-issues',
-    title: 'Issues Dashboard',
-    text: "See all missing parts, damage, and additional orders in one place. Filter by unreported, share in bulk, track resolution status.",
+    id: 'tab-issues', target: 'tab-issues',
+    title: '11. Issues Dashboard',
+    text: 'The Issues tab shows all missing parts, damage, and additional orders across every fixture. Edit quantities inline, filter by unreported, share in bulk, track resolution.',
+  },
+
+  // ── Department Photos ──
+  {
+    id: 'tab-visual', target: 'tab-visual', interactive: true, triggerClick: true,
+    title: '12. Department Photos',
+    text: 'Create departments for each area of the store. Take photos as you install \u2014 build a visual reference that carries forward to future jobs.',
+  },
+
+  // ── Receipts ──
+  {
+    id: 'tab-receipts', target: 'tab-receipts', interactive: true, triggerClick: true,
+    title: '13. Receipt Tracking',
+    text: 'Track every purchase with photos. Take a picture of your receipt, tap Scan Receipt, and SiteKit reads the total, date, and store automatically. Categorize as Materials, Tools, Gas, Meals, and more.',
   },
   {
-    id: 'tab-receipts',
-    target: 'tab-receipts',
-    title: 'Receipts',
-    text: 'Track purchases by category. Snap receipt photos and use OCR to auto-fill store, amount, and date.',
-    interactive: true,
-    triggerClick: true,
+    id: 'gas-tracking', target: null,
+    title: '14. Gas & Expense Views',
+    text: 'Toggle to Gas Only for gas-specific stats \u2014 total spend, fill-ups, average per fill. Filter by week or month. Generate printable receipt reports for your PM.',
+  },
+
+  // ── Crew Hours ──
+  {
+    id: 'tab-crew', target: 'tab-crew', interactive: true, triggerClick: true,
+    title: '15. Crew Hours',
+    text: 'Add your crew, set daily hour targets, and log hours on the weekly grid. The summary card shows available vs. logged hours with shortage alerts.',
+  },
+
+  // ── Reports & Tools ──
+  {
+    id: 'report', target: 'report',
+    title: '16. Reports',
+    text: 'Generate reports grouped by vendor or section with a "Prepared By" field. Print directly or share with your project manager. Receipt reports include photo thumbnails.',
   },
   {
-    id: 'tab-crew',
-    target: 'tab-crew',
-    title: 'Crew Hours',
-    text: 'Track your crew\'s daily hours per job. Clock in/out, edit the weekly grid, and review summaries with shortage alerts.',
-    interactive: true,
-    triggerClick: true,
+    id: 'global-search', target: 'global-search',
+    title: '17. Search Everything',
+    text: 'Search across fixtures, departments, and receipts all at once. Tap \uD83D\uDD0D or press Ctrl+K. Section nicknames are searchable too.',
+  },
+
+  // ── Data Safety ──
+  {
+    id: 'offline', target: null,
+    title: '18. Works Offline',
+    text: "No signal on the jobsite? No problem. SiteKit saves everything on your device. A yellow banner shows when you\u2019re offline \u2014 your data is safe.",
   },
   {
-    id: 'report',
-    target: 'report',
-    title: 'Reports & Export',
-    text: 'Download PDF or CSV reports grouped by vendor or section. Print directly or share with your project manager.',
+    id: 'backup', target: 'backup',
+    title: '19. Back Up Your Data',
+    text: 'All data lives on this device. Download a backup regularly \u2014 SiteKit reminds you every 7 days. Backups include all photos and can be restored on any device.',
+  },
+
+  // ── Finishing Up ──
+  {
+    id: 'feedback', target: 'feedback-btn',
+    title: '20. Send Feedback',
+    text: 'See something that could be better? The \uD83D\uDCAC button is always there. Bug reports, feature ideas, anything \u2014 it goes straight to the development team.',
   },
   {
-    id: 'global-search',
-    target: 'global-search',
-    title: 'Global Search',
-    text: 'Search everything at once — fixtures, departments, receipts. Tap \uD83D\uDD0D or press Ctrl+K.',
+    id: 'lock', target: 'lock',
+    title: '21. Lock Your App',
+    text: 'Lock the app when you\u2019re done. Your PIN is securely hashed \u2014 safe even on a shared device. Change it anytime from the sidebar.',
   },
+
+  // ── Done ──
   {
-    id: 'backup',
-    target: 'backup',
-    title: 'Backup Your Data',
-    text: 'All data lives on this device. Download a backup regularly — SiteKit reminds you after 7 days.',
-  },
-  {
-    id: 'feedback',
-    target: 'feedback-btn',
-    title: 'Send Feedback',
-    text: 'See something that could be better? The \uD83D\uDCAC button is always there. Bug reports, feature ideas, anything.',
-  },
-  {
-    id: 'lock',
-    target: 'lock',
-    title: 'PIN Lock',
-    text: 'Lock the app when you\'re done. Your PIN is hashed with PBKDF2 — secure even on a shared device.',
-  },
-  {
-    id: 'dashboard-cards',
-    target: null,
-    title: 'Dashboard at a Glance',
-    text: "The top cards show what needs attention right now \u2014 overdue deliveries, items arriving this week, unreported issues, and what came in today. Tap any card to filter.",
-  },
-  {
-    id: 'quick-report',
-    target: null,
-    title: 'Quick Report Mode',
-    text: "Need to report multiple issues at once? Tap Quick Report in the toolbar, select the items, and generate one formatted message for your PM.",
-  },
-  {
-    id: 'section-nicknames',
-    target: null,
-    title: 'Rename Sections',
-    text: "Tap the \u270F\uFE0F pencil next to any section header to give it a nickname. 'D-WALL-COSM-GND' becomes 'Cosmetics Gondola'. Searchable too.",
-  },
-  {
-    id: 'gas-tracking',
-    target: null,
-    title: 'Gas Tracking',
-    text: "Toggle to Gas Only in the Receipts tab to see gas-specific stats \u2014 total spend, fill-ups, average per fill. Filter by week or month.",
-  },
-  {
-    id: 'delivery-timeline',
-    target: null,
-    title: 'Delivery Schedule',
-    text: "The timeline pills below the dashboard show what's arriving each day this week. Tap a day to filter.",
-  },
-  {
-    id: 'offline',
-    target: null,
-    title: 'Works Offline',
-    text: "SiteKit saves everything on your device. No internet? No problem. A yellow banner shows when you're offline \u2014 your data is safe.",
-  },
-  {
-    id: 'done',
-    target: null,
-    title: "You're all set!",
-    text: "SiteKit is built by a contractor, for contractors. Every feature came from a real jobsite need. Now go run your remodel \u2014 SiteKit has your back.",
-    fullScreen: true,
-    isFinal: true,
+    id: 'done', target: null, fullScreen: true, isFinal: true,
+    title: "You\u2019re ready to go!",
+    text: "SiteKit was built on real jobsites by real contractors. Every feature exists because someone needed it in the field. Your fixtures, photos, receipts, and crew hours \u2014 all in one place, always on your phone.\n\nGo run your remodel. SiteKit has your back.",
   },
 ];
 
