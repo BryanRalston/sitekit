@@ -8,6 +8,7 @@ import CrewCard from './CrewCard';
 import CrewMemberModal from './CrewMemberModal';
 import WeekSummary from './WeekSummary';
 import { fmtHours, fmtBalance, getInitial } from '../utils/crew';
+import { BarChart } from './Charts';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -324,6 +325,22 @@ export default function CrewTab({ job, onCrewChange }) {
     return { available, logged, remaining, color, borderColor, bgColor };
   }, [crewMembers, timeEntries, weekStart, weekOffset]);
 
+  // Crew hours bar chart data
+  const crewHoursBarData = useMemo(() => {
+    const MEMBER_COLORS = [C.accent, C.blue, C.green, C.purple, C.teal, C.yellow, C.red];
+    return crewMembers.map((m, i) => {
+      const total = timeEntries
+        .filter(e => e.crewMemberId === m.id)
+        .reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
+      return {
+        label: m.name.split(' ')[0], // First name only for space
+        value: parseFloat(total.toFixed(1)),
+        color: m.color || MEMBER_COLORS[i % MEMBER_COLORS.length],
+        formatValue: (v) => `${v}h`,
+      };
+    });
+  }, [crewMembers, timeEntries]);
+
   // ── Summary view ──────────────────────────────────────────────────────────
 
   if (showSummary) {
@@ -594,6 +611,19 @@ export default function CrewTab({ job, onCrewChange }) {
           <span style={{ ...MF, fontSize: 12, color: C.muted }}>
             {fmtHours(weekHoursSummary.remaining)} hrs remaining
           </span>
+        </div>
+      )}
+
+      {/* Crew hours bar chart (desktop) */}
+      {crewMembers.length > 0 && crewHoursBarData.some(d => d.value > 0) && (
+        <div style={{
+          flexShrink: 0, padding: '10px 18px', borderBottom: `1px solid ${C.border}`,
+          background: C.card,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            Hours This Week
+          </div>
+          <BarChart data={crewHoursBarData} />
         </div>
       )}
 

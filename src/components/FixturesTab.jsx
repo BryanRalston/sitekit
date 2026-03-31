@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { C, TF, MF, STATUS, getItemStatus } from '../tokens';
 import { Btn, Toggle } from './ui';
+import { MiniLineChart, ProgressRing } from './Charts';
+import { SHARE_FOOTER } from '../utils/shareFooter';
 import { useMobile } from '../hooks/useApi';
 import ItemRow from './ItemRow';
 import QuickReceive from './QuickReceive';
@@ -199,6 +201,32 @@ export default function FixturesTab({ job, onRefresh }) {
     return days;
   }, [items]);
 
+  // Receiving trend: items received per day over last 7 days
+  const receivingTrend = useMemo(() => {
+    const trend = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const count = items.filter(it => it.dateReceived === dateStr).length;
+      trend.push(count);
+    }
+    return trend;
+  }, [items]);
+
+  // Overall progress
+  const overallProgress = useMemo(() => {
+    const total = items.length;
+    const received = items.filter(i => {
+      const r = parseInt(i.qtyReceived || '0');
+      const o = parseInt(i.qtyOrdered || '0');
+      return r > 0 && o > 0 && r >= o;
+    }).length;
+    return { total, received, pct: total > 0 ? Math.round((received / total) * 100) : 0 };
+  }, [items]);
+
   // Unreported issues computation
   const unreportedIssues = useMemo(() => {
     return items.filter(i => {
@@ -241,6 +269,7 @@ export default function FixturesTab({ job, onRefresh }) {
       }
     }
 
+    body += SHARE_FOOTER;
     let shared = false;
     if (navigator.share) {
       try {
@@ -441,6 +470,7 @@ export default function FixturesTab({ job, onRefresh }) {
       }
     }
 
+    body += SHARE_FOOTER;
     let shared = false;
     if (navigator.share) {
       try {
@@ -610,6 +640,44 @@ export default function FixturesTab({ job, onRefresh }) {
               Received Today
             </div>
           </button>
+
+          {/* Progress ring + Receiving trend row */}
+          {overallProgress.total > 0 && (
+            <div style={{
+              gridColumn: isMobile ? '1 / -1' : '1 / -1',
+              display: 'flex', alignItems: 'center', gap: 16, padding: '8px 4px 4px',
+              flexWrap: 'wrap',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ position: 'relative' }}>
+                  <ProgressRing
+                    percent={overallProgress.pct}
+                    size={52}
+                    color={overallProgress.pct > 75 ? C.green : overallProgress.pct > 40 ? C.blue : C.accent}
+                  />
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, width: 52, height: 52,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ ...MF, fontSize: 11, fontWeight: 700, color: C.text }}>{overallProgress.pct}%</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ ...MF, fontSize: 12, fontWeight: 700, color: C.text }}>{overallProgress.received}/{overallProgress.total}</div>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 600, textTransform: 'uppercase' }}>Received</div>
+                </div>
+              </div>
+
+              {receivingTrend.some(v => v > 0) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 9, color: C.muted, fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>7-Day Trend</div>
+                    <MiniLineChart data={receivingTrend} color={C.green} width={100} height={28} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>}
         </div>
       )}

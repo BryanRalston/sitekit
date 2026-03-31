@@ -6,6 +6,7 @@ import { api } from '../api';
 import ReceiptModal from './ReceiptModal';
 import ReceiptReportModal from './ReceiptReportModal';
 import { useToast } from './Toast';
+import { PieChart, BarChart } from './Charts';
 
 // Category color definitions (pastel bg + dark text)
 export const CATEGORIES = {
@@ -191,6 +192,37 @@ export default function ReceiptsTab({ job, onRefresh }) {
     return Object.entries(cats).sort(([,a], [,b]) => b - a);
   }, [receipts]);
 
+  // Category data for PieChart
+  const CATEGORY_PIE_COLORS = {
+    Materials: '#2563eb', Tools: '#7c3aed', Gas: '#ca8a04',
+    Permits: '#16a34a', Meals: '#dc2626', Rental: '#3730a3', Other: '#6b7280',
+  };
+  const categoryPieData = useMemo(() => {
+    return categoryBreakdown.map(([label, value]) => ({
+      label,
+      value,
+      color: CATEGORY_PIE_COLORS[label] || '#6b7280',
+    }));
+  }, [categoryBreakdown]);
+
+  // Top stores by spend for BarChart
+  const topStoresData = useMemo(() => {
+    const stores = {};
+    receipts.forEach(r => {
+      const store = r.store || 'No Store';
+      stores[store] = (stores[store] || 0) + (parseFloat(r.amount) || 0);
+    });
+    return Object.entries(stores)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([label, value]) => ({
+        label,
+        value,
+        color: C.accent,
+        formatValue: (v) => '$' + v.toFixed(0),
+      }));
+  }, [receipts]);
+
   if (loading) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 13 }}>
@@ -307,6 +339,37 @@ export default function ReceiptsTab({ job, onRefresh }) {
                 </span>
               );
             })}
+          </div>
+        )}
+
+        {/* Charts: Category PieChart + Top Stores BarChart */}
+        {viewMode === 'all' && receipts.length >= 3 && (
+          <div style={{
+            display: 'flex', gap: 16, padding: '4px 18px 12px',
+            flexWrap: 'wrap', alignItems: 'flex-start',
+          }}>
+            {categoryPieData.length > 1 && (
+              <div style={{
+                flex: '1 1 200px', padding: '12px 14px', background: C.bg,
+                borderRadius: 8, border: `1px solid ${C.borderLight}`,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  Spending by Category
+                </div>
+                <PieChart data={categoryPieData} size={80} />
+              </div>
+            )}
+            {topStoresData.length > 1 && (
+              <div style={{
+                flex: '1 1 240px', padding: '12px 14px', background: C.bg,
+                borderRadius: 8, border: `1px solid ${C.borderLight}`,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                  Top Stores by Spend
+                </div>
+                <BarChart data={topStoresData} />
+              </div>
+            )}
           </div>
         )}
 

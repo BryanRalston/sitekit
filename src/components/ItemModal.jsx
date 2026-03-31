@@ -4,6 +4,7 @@ import { Modal, Inp, Btn, Toggle } from './ui';
 import FixtureKnowledge from './FixtureKnowledge';
 import { api } from '../api';
 import { useToast } from './Toast';
+import { SHARE_FOOTER } from '../utils/shareFooter';
 
 function validateItem(f, isEditing) {
   const errors = {};
@@ -36,6 +37,7 @@ async function shareIssue(job, item, issueType) {
     body = header + `DAMAGE REPORT:\n• ${item.itemNumber} (${item.description})\n${qtyLine}  ${item.damageNotes}\n  Qty Ordered: ${item.qtyOrdered || 'N/A'} | Section: ${item.section || 'N/A'}`;
   }
 
+  body += SHARE_FOOTER;
   if (navigator.share) {
     try {
       await navigator.share({ title: subject, text: body });

@@ -6,6 +6,7 @@ import { put } from '../db';
 import ReceiptLogImport from './ReceiptLogImport';
 import FeedbackViewer from './FeedbackViewer';
 import { useToast } from './Toast';
+import { SHARE_FOOTER } from '../utils/shareFooter';
 
 const PROFILE_KEY = 'sitekit_contractor_profile';
 
@@ -267,16 +268,17 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
     if (!activeJobId) { toast.error('Select a job first'); return; }
     try {
       const { text, jobName } = await api.getDailySummary(activeJobId);
+      const textWithFooter = text + SHARE_FOOTER;
       if (navigator.share) {
         try {
-          await navigator.share({ title: `SiteKit Daily Summary \u2014 ${jobName}`, text });
+          await navigator.share({ title: `SiteKit Daily Summary \u2014 ${jobName}`, text: textWithFooter });
           toast.success('Summary shared');
           return;
         } catch (e) {
           if (e.name === 'AbortError') return;
         }
       }
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(textWithFooter);
       toast.success('Summary copied to clipboard');
     } catch (err) {
       toast.error('Summary failed: ' + err.message);

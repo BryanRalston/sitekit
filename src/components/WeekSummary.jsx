@@ -4,6 +4,7 @@ import { Btn } from './ui';
 import { useMobile } from '../hooks/useApi';
 import { useToast } from './Toast';
 import { fmtHours, fmtBalance } from '../utils/crew';
+import { SHARE_FOOTER } from '../utils/shareFooter';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -82,6 +83,7 @@ export default function WeekSummary({
     }
     lines.push('');
     lines.push(`Short: ${shortCount} | Over: ${overCount} | On Track: ${onTrackCount}`);
+    lines.push(SHARE_FOOTER);
     navigator.clipboard.writeText(lines.join('\n')).then(() => {
       toast.success('Week summary copied');
     }).catch(() => {

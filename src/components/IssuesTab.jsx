@@ -5,6 +5,7 @@ import { useMobile } from '../hooks/useApi';
 import { api } from '../api';
 import { useToast } from './Toast';
 import { haptic } from '../utils/haptic';
+import { SHARE_FOOTER } from '../utils/shareFooter';
 
 // ─── Status helpers ──────────────────────────────────────────────────────────
 
@@ -37,19 +38,20 @@ function StatusBadge({ status, date }) {
 // ─── Share helpers ───────────────────────────────────────────────────────────
 
 async function shareText(title, body) {
+  const bodyWithFooter = body + SHARE_FOOTER;
   if (navigator.share) {
     try {
-      await navigator.share({ title, text: body });
+      await navigator.share({ title, text: bodyWithFooter });
       return true;
     } catch (e) {
       if (e.name !== 'AbortError') {
-        try { await navigator.clipboard.writeText(body); } catch {}
+        try { await navigator.clipboard.writeText(bodyWithFooter); } catch {}
         return true;
       }
       return false;
     }
   } else {
-    try { await navigator.clipboard.writeText(body); return true; } catch { return false; }
+    try { await navigator.clipboard.writeText(bodyWithFooter); return true; } catch { return false; }
   }
 }
 
