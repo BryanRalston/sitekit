@@ -6,6 +6,7 @@ export default function Btn({ children, onClick, variant = "primary", size = "md
     primary: { background: C.accent, color: "#1a1a1a", border: "none" },
     ghost:   { background: "transparent", color: C.muted, border: `1px solid ${C.border}` },
     danger:  { background: "transparent", color: C.red, border: `1px solid ${C.redBorder}` },
+    dangerFilled: { background: C.red, color: "#fff", border: "none" },
     orange:  { background: C.accentDim, color: C.accent, border: `1px solid ${C.accentBorder}` },
     green:   { background: C.greenDim, color: C.green, border: `1px solid ${C.greenBorder}` },
     blue:    { background: C.blueDim, color: C.blue, border: `1px solid ${C.blueBorder}` },
