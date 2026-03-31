@@ -118,9 +118,13 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
     damageReported: "", damageResolved: ""
   });
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [missingPhotoPreview, setMissingPhotoPreview] = useState(null);
+  const [additionalPhotoPreview, setAdditionalPhotoPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [touched, setTouched] = useState({});
   const fileRef = useRef();
+  const missingPhotoRef = useRef();
+  const additionalPhotoRef = useRef();
   const s = k => v => { setF(p => ({ ...p, [k]: v })); setTouched(p => ({ ...p, [k]: true })); };
   const itemErrors = validateItem(f, isEditing);
   const hasItemErrors = Object.keys(itemErrors).length > 0;
@@ -129,13 +133,15 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
     <div style={{ color: C.red, fontSize: 11, marginTop: 3 }}>{itemErrors[field]}</div>
   ) : null;
 
-  // Load existing photo if item has one
+  // Load existing photos if item has them
   const [photoUrl, setPhotoUrl] = useState(null);
+  const [missingPhotoUrl, setMissingPhotoUrl] = useState(null);
+  const [additionalPhotoUrl, setAdditionalPhotoUrl] = useState(null);
   useEffect(() => {
-    if (item?.photo_id) {
-      api.getPhotoUrl(item.photo_id).then(url => { if (url) setPhotoUrl(url); });
-    }
-  }, [item?.photo_id]);
+    if (item?.photo_id) api.getPhotoUrl(item.photo_id).then(url => { if (url) setPhotoUrl(url); });
+    if (item?.missingPhotoId) api.getPhotoUrl(item.missingPhotoId).then(url => { if (url) setMissingPhotoUrl(url); });
+    if (item?.additionalPhotoId) api.getPhotoUrl(item.additionalPhotoId).then(url => { if (url) setAdditionalPhotoUrl(url); });
+  }, [item?.photo_id, item?.missingPhotoId, item?.additionalPhotoId]);
 
   const handlePhoto = async (e) => {
     const file = e.target.files[0];
@@ -172,6 +178,42 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
   };
 
   const displayPhoto = photoPreview || photoUrl;
+
+  // Issue photo handlers
+  const handleIssuePhoto = async (e, idField, setPreview) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = (ev) => setPreview(ev.target.result);
+      reader.readAsDataURL(file);
+      const fd = new FormData();
+      fd.append("photo", file);
+      fd.append("type", "issue");
+      if (f.id) fd.append("item_id", f.id);
+      if (jobId) fd.append("job_id", jobId);
+      const result = await api.uploadPhoto(fd);
+      setF(p => ({ ...p, [idField]: result.id }));
+    } catch (err) {
+      toast.error("Photo upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeIssuePhoto = async (idField, setPreview, setUrl) => {
+    if (f[idField]) {
+      try { await api.deletePhoto(f[idField]); } catch {}
+    }
+    setPreview(null);
+    setUrl(null);
+    setF(p => ({ ...p, [idField]: undefined }));
+  };
+
+  const displayMissingPhoto = missingPhotoPreview || missingPhotoUrl;
+  const displayAdditionalPhoto = additionalPhotoPreview || additionalPhotoUrl;
 
   return (
     <Modal title={item ? "Edit Item" : "Add Fixture Item"} onClose={onClose} width={700}>
@@ -234,6 +276,18 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
               </div>
             </div>
             <Inp value={f.missingParts} onChange={s("missingParts")} placeholder="Describe missing parts..." multiline rows={2} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {displayMissingPhoto && (
+                <div style={{ position: "relative", display: "inline-block" }}>
+                  <img src={displayMissingPhoto} alt="" style={{ maxWidth: 120, maxHeight: 90, borderRadius: 6, border: `1px solid ${C.border}` }} />
+                  <button onClick={() => removeIssuePhoto('missingPhotoId', setMissingPhotoPreview, setMissingPhotoUrl)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10 }}>✕</button>
+                </div>
+              )}
+              <input type="file" accept="image/*" ref={missingPhotoRef} style={{ display: "none" }} onChange={e => handleIssuePhoto(e, 'missingPhotoId', setMissingPhotoPreview)} />
+              <Btn variant="ghost" size="sm" icon="📷" onClick={() => missingPhotoRef.current.click()}>
+                {displayMissingPhoto ? "Replace" : "Photo"}
+              </Btn>
+            </div>
             <IssueTracker
               issueType="missing"
               hasContent={!!f.missingParts}
@@ -258,6 +312,18 @@ export default function ItemModal({ item, jobId, job, onSave, onClose, onDelete 
               </div>
             </div>
             <Inp value={f.additionalOrders} onChange={s("additionalOrders")} placeholder="Additional items needed..." multiline rows={2} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {displayAdditionalPhoto && (
+                <div style={{ position: "relative", display: "inline-block" }}>
+                  <img src={displayAdditionalPhoto} alt="" style={{ maxWidth: 120, maxHeight: 90, borderRadius: 6, border: `1px solid ${C.border}` }} />
+                  <button onClick={() => removeIssuePhoto('additionalPhotoId', setAdditionalPhotoPreview, setAdditionalPhotoUrl)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10 }}>✕</button>
+                </div>
+              )}
+              <input type="file" accept="image/*" ref={additionalPhotoRef} style={{ display: "none" }} onChange={e => handleIssuePhoto(e, 'additionalPhotoId', setAdditionalPhotoPreview)} />
+              <Btn variant="ghost" size="sm" icon="📷" onClick={() => additionalPhotoRef.current.click()}>
+                {displayAdditionalPhoto ? "Replace" : "Photo"}
+              </Btn>
+            </div>
             <IssueTracker
               issueType="order"
               hasContent={!!f.additionalOrders}
