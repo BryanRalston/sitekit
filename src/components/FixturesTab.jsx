@@ -653,9 +653,6 @@ export default function FixturesTab({ job, onRefresh }) {
           {/* Row 2: Primary actions */}
           <div style={{ padding: "4px 14px 10px", display: "flex", gap: 8 }}>
             <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Import</Btn>
-            <Btn variant={quickReportMode ? "danger" : "purple"} size="sm" icon={quickReportMode ? "✕" : "📋"} onClick={() => { setQuickReportMode(v => !v); setQuickReportSelected(new Set()); }} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>
-              {quickReportMode ? "Cancel" : "Quick Report"}
-            </Btn>
             <Btn variant="primary" size="sm" icon="+" onClick={() => setEditItem({})} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>Add Item</Btn>
           </div>
 
@@ -805,9 +802,6 @@ export default function FixturesTab({ job, onRefresh }) {
           <Toggle checked={bulkMode} onChange={v => { setBulkMode(v); setSelectedIds(new Set()); }} label="Bulk" data-testid="bulk-toggle" />
           <Btn variant="ghost" size="sm" icon="⬆" onClick={() => setShowImport(true)} data-tutorial="import" data-testid="import-btn">Import</Btn>
           <Btn variant="orange" size="sm" icon="📊" onClick={() => setShowReport(true)} data-tutorial="report" data-testid="report-btn">Report</Btn>
-          <Btn variant={quickReportMode ? "danger" : "purple"} size="sm" icon={quickReportMode ? "✕" : "📋"} onClick={() => { setQuickReportMode(v => !v); setQuickReportSelected(new Set()); }}>
-            {quickReportMode ? "Cancel" : "Quick Report"}
-          </Btn>
           {unreportedIssues.length > 0 && (
             <>
               <button onClick={() => setIssuesFilter(v => !v)} style={{
