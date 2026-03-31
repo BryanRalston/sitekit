@@ -222,6 +222,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [showWelcomeNewJob, setShowWelcomeNewJob] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
@@ -457,6 +458,7 @@ function AppInner() {
         onDeleteJob={handleDeleteJob}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        onFeedback={() => { setFeedbackOpen(true); setMobileMenuOpen(false); }}
       />
 
       {/* Main content */}
@@ -700,7 +702,7 @@ function AppInner() {
       )}
 
       {/* Feedback Widget */}
-      <FeedbackWidget currentTab={activeTab} />
+      <FeedbackWidget currentTab={activeTab} externalOpen={feedbackOpen} onExternalClose={() => setFeedbackOpen(false)} />
     </div>
   );
 }

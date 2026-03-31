@@ -163,7 +163,7 @@ export default function ItemRow({ item, onEdit, onQuickReceive, showQtyCol, grou
           }}
         >
           <span style={{ fontSize: 18, color: '#fff' }}>⚠️</span>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', letterSpacing: '0.03em' }}>Damage</span>
+          <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', letterSpacing: '0.03em' }}>Issue</span>
         </div>
 
         {/* Sliding row content */}

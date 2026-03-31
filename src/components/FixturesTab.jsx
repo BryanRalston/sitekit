@@ -9,7 +9,7 @@ import ImportModal from './ImportModal';
 import ReportModal from './ReportModal';
 import VirtualList from './VirtualList';
 import ActivityFeed from './ActivityFeed';
-import QuickDamageReport, { DamageFAB } from './QuickDamageReport';
+import QuickIssueReport, { IssueFAB } from './QuickDamageReport';
 import { api } from '../api';
 import { useToast } from './Toast';
 import { haptic } from '../utils/haptic';
@@ -109,8 +109,8 @@ export default function FixturesTab({ job, onRefresh }) {
   const [expandedGroups, setExpandedGroups] = useState(new Set());
   const [sectionNicknames, setSectionNicknames] = useState({});
   const [editingNickname, setEditingNickname] = useState(null); // group name being edited
-  const [damageReportOpen, setDamageReportOpen] = useState(false);
-  const [damageReportItem, setDamageReportItem] = useState(null); // prefilled item from swipe
+  const [issueReportOpen, setIssueReportOpen] = useState(false);
+  const [issueReportItem, setIssueReportItem] = useState(null); // prefilled item from swipe
   const [nicknameInput, setNicknameInput] = useState("");
   const [editingIssue, setEditingIssue] = useState(null); // { itemId, issueType }
 
@@ -372,22 +372,22 @@ export default function FixturesTab({ job, onRefresh }) {
 
   // Swipe action handlers
   const handleSwipeDamage = useCallback((item) => {
-    setDamageReportItem(item);
-    setDamageReportOpen(true);
+    setIssueReportItem(item);
+    setIssueReportOpen(true);
   }, []);
 
   const handleSwipeReceive = useCallback((item) => {
     setQuickReceiveId(prev => prev === item.id ? null : item.id);
   }, []);
 
-  const handleDamageFABClick = useCallback(() => {
-    setDamageReportItem(null);
-    setDamageReportOpen(true);
+  const handleIssueFABClick = useCallback(() => {
+    setIssueReportItem(null);
+    setIssueReportOpen(true);
   }, []);
 
-  const handleDamageReportClose = useCallback(() => {
-    setDamageReportOpen(false);
-    setDamageReportItem(null);
+  const handleIssueReportClose = useCallback(() => {
+    setIssueReportOpen(false);
+    setIssueReportItem(null);
   }, []);
 
   const toggleQuickReportSelect = useCallback((id) => {
@@ -1308,18 +1308,18 @@ export default function FixturesTab({ job, onRefresh }) {
         </div>
       )}
 
-      {/* Damage FAB — always visible on fixtures tab */}
+      {/* Issue FAB — always visible on fixtures tab */}
       {items.length > 0 && !quickReportMode && !bulkMode && (
-        <DamageFAB onClick={handleDamageFABClick} />
+        <IssueFAB onClick={handleIssueFABClick} />
       )}
 
-      {/* Quick Damage Report overlay */}
-      {damageReportOpen && (
-        <QuickDamageReport
+      {/* Quick Issue Report overlay */}
+      {issueReportOpen && (
+        <QuickIssueReport
           items={items}
           onRefresh={onRefresh}
-          onClose={handleDamageReportClose}
-          prefilledItem={damageReportItem}
+          onClose={handleIssueReportClose}
+          prefilledItem={issueReportItem}
         />
       )}
     </>

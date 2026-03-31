@@ -175,7 +175,7 @@ function ChangePinModal({ onClose }) {
   );
 }
 
-export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDeleteJob, mobileOpen, onCloseMobile }) {
+export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDeleteJob, mobileOpen, onCloseMobile, onFeedback }) {
   const [showNewJob, setShowNewJob] = useState(false);
   const [showChangePin, setShowChangePin] = useState(false);
   const [showReceiptImport, setShowReceiptImport] = useState(false);
@@ -392,6 +392,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
             { icon: "📊", label: "Export CSV", testId: "export-csv-btn", onClick: () => setShowExportMenu(v => !v) },
             { icon: "📝", label: "Summary", testId: "daily-summary-btn", onClick: handleDailySummary },
             { icon: "👤", label: "Profile", testId: "profile-btn", onClick: () => setShowProfile(true) },
+            { icon: "💬", label: "Feedback", testId: "feedback-btn", tutorial: "feedback-btn", onClick: () => { if (onFeedback) onFeedback(); } },
           ].map(btn => (
             <button key={btn.label} onClick={btn.onClick} data-tutorial={btn.tutorial || undefined} data-testid={btn.testId} style={{
               background: "none", border: `1px solid ${C.border}`, borderRadius: 6,

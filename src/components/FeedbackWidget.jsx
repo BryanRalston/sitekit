@@ -75,8 +75,13 @@ async function sendRemoteFeedback(entry) {
   }
 }
 
-export default function FeedbackWidget({ currentTab }) {
+export default function FeedbackWidget({ currentTab, externalOpen, onExternalClose }) {
   const [open, setOpen] = useState(false);
+
+  // Allow opening from outside (sidebar)
+  React.useEffect(() => {
+    if (externalOpen) setOpen(true);
+  }, [externalOpen]);
   const [type, setType] = useState('feedback');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -112,38 +117,11 @@ export default function FeedbackWidget({ currentTab }) {
 
   return (
     <>
-      {/* Floating button — hidden when a modal is open */}
-      {!modalOpen && !open && <button
-        data-tutorial="feedback-btn"
-        onClick={() => setOpen(true)}
-        aria-label="Submit feedback"
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 20,
-          zIndex: 100,
-          width: 48,
-          height: 48,
-          borderRadius: '50%',
-          background: 'rgba(249,115,22,0.85)',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 22,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-          transition: 'transform 0.15s, background 0.15s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.background = C.accent; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = 'rgba(249,115,22,0.85)'; }}
-      >
-        {'\uD83D\uDCAC'}
-      </button>}
+      {/* No floating button — feedback is triggered from sidebar */}
 
       {/* Feedback modal */}
       {open && (
-        <Modal title="Send Feedback" onClose={() => setOpen(false)} width={420}>
+        <Modal title="Send Feedback" onClose={() => { setOpen(false); onExternalClose?.(); }} width={420}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Type selector */}
             <div style={{ display: 'flex', gap: 8 }}>
