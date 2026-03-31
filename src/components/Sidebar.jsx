@@ -7,6 +7,42 @@ import ReceiptLogImport from './ReceiptLogImport';
 import FeedbackViewer from './FeedbackViewer';
 import { useToast } from './Toast';
 
+const PROFILE_KEY = 'sitekit_contractor_profile';
+
+function getContractorProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY)) || {}; } catch { return {}; }
+}
+
+function saveContractorProfile(profile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+
+function ProfileModal({ onClose }) {
+  const [profile, setProfile] = useState(getContractorProfile);
+
+  const update = (key, val) => {
+    const next = { ...profile, [key]: val };
+    setProfile(next);
+    saveContractorProfile(next);
+  };
+
+  return (
+    <Modal title="Contractor Profile" onClose={onClose} width={400}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Inp label="Name" value={profile.name || ''} onChange={v => update('name', v)} placeholder="John Smith" />
+        <Inp label="Company" value={profile.company || ''} onChange={v => update('company', v)} placeholder="Smith Contracting" />
+        <Inp label="Phone" value={profile.phone || ''} onChange={v => update('phone', v)} placeholder="(555) 555-1234" />
+        <div style={{ fontSize: 10, color: C.muted, marginTop: 4, lineHeight: 1.6 }}>
+          This info auto-fills "Prepared By" on reports and shows your name on the lock screen.
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
+          <Btn variant="primary" onClick={onClose}>Done</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function validateNewJob(f) {
   const errors = {};
   if (!f.name.trim()) errors.name = "Job name is required";
@@ -144,6 +180,8 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
   const [showChangePin, setShowChangePin] = useState(false);
   const [showReceiptImport, setShowReceiptImport] = useState(false);
   const [showFeedbackViewer, setShowFeedbackViewer] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const { toast, confirm: toastConfirm } = useToast();
 
   // Hidden admin trigger: 5 taps on logo within 3 seconds
@@ -188,6 +226,60 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       localStorage.setItem('sitekit_last_backup', Date.now().toString());
     } catch (err) {
       toast.error('Export failed: ' + err.message);
+    }
+  };
+
+  const triggerCsvDownload = (csv, filename) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportFixturesCsv = async () => {
+    if (!activeJobId) { toast.error('Select a job first'); return; }
+    try {
+      const { csv, filename } = await api.exportFixturesCsv(activeJobId);
+      triggerCsvDownload(csv, filename);
+      toast.success('Fixtures CSV exported');
+    } catch (err) {
+      toast.error('Export failed: ' + err.message);
+    }
+    setShowExportMenu(false);
+  };
+
+  const handleExportReceiptsCsv = async () => {
+    if (!activeJobId) { toast.error('Select a job first'); return; }
+    try {
+      const { csv, filename } = await api.exportReceiptsCsv(activeJobId);
+      triggerCsvDownload(csv, filename);
+      toast.success('Receipts CSV exported');
+    } catch (err) {
+      toast.error('Export failed: ' + err.message);
+    }
+    setShowExportMenu(false);
+  };
+
+  const handleDailySummary = async () => {
+    if (!activeJobId) { toast.error('Select a job first'); return; }
+    try {
+      const { text, jobName } = await api.getDailySummary(activeJobId);
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: `SiteKit Daily Summary \u2014 ${jobName}`, text });
+          toast.success('Summary shared');
+          return;
+        } catch (e) {
+          if (e.name === 'AbortError') return;
+        }
+      }
+      await navigator.clipboard.writeText(text);
+      toast.success('Summary copied to clipboard');
+    } catch (err) {
+      toast.error('Summary failed: ' + err.message);
     }
   };
 
@@ -293,6 +385,9 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
             { icon: "🔑", label: "PIN", testId: "change-pin-btn", onClick: () => setShowChangePin(true) },
             { icon: "📥", label: "ReceiptLog", testId: "receiptlog-import-btn", onClick: () => setShowReceiptImport(true) },
             { icon: "💾", label: "Backup", tutorial: "backup", testId: "backup-btn", onClick: handleExport },
+            { icon: "📊", label: "Export CSV", testId: "export-csv-btn", onClick: () => setShowExportMenu(v => !v) },
+            { icon: "📝", label: "Summary", testId: "daily-summary-btn", onClick: handleDailySummary },
+            { icon: "👤", label: "Profile", testId: "profile-btn", onClick: () => setShowProfile(true) },
           ].map(btn => (
             <button key={btn.label} onClick={btn.onClick} data-tutorial={btn.tutorial || undefined} data-testid={btn.testId} style={{
               background: "none", border: `1px solid ${C.border}`, borderRadius: 6,
@@ -307,6 +402,34 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
             </button>
           ))}
         </div>
+        {showExportMenu && (
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 4,
+            padding: 8, background: C.card, borderRadius: 8,
+            border: `1px solid ${C.border}`,
+          }}>
+            <button onClick={handleExportFixturesCsv} data-testid="export-fixtures-csv" style={{
+              background: "none", border: "none", color: C.text, cursor: "pointer",
+              fontSize: 12, padding: "6px 10px", borderRadius: 6, textAlign: "left",
+              fontFamily: "inherit",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = C.cardHover; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "none"; }}
+            >
+              📋 Export Fixtures CSV
+            </button>
+            <button onClick={handleExportReceiptsCsv} data-testid="export-receipts-csv" style={{
+              background: "none", border: "none", color: C.text, cursor: "pointer",
+              fontSize: 12, padding: "6px 10px", borderRadius: 6, textAlign: "left",
+              fontFamily: "inherit",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = C.cardHover; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "none"; }}
+            >
+              🧾 Export Receipts CSV
+            </button>
+          </div>
+        )}
         <Btn variant="primary" full icon="+" onClick={() => setShowNewJob(true)} data-tutorial="new-job" data-testid="new-job-btn">New Job</Btn>
       </div>
 
@@ -314,6 +437,7 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
       {showChangePin && <ChangePinModal onClose={() => setShowChangePin(false)} />}
       {showReceiptImport && <ReceiptLogImport onClose={() => setShowReceiptImport(false)} onImport={() => setShowReceiptImport(false)} />}
       {showFeedbackViewer && <FeedbackViewer onClose={() => setShowFeedbackViewer(false)} />}
+      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
     </div>
   );
 

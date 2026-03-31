@@ -244,10 +244,18 @@ function SetupView({ onSetup }) {
   );
 }
 
+function getContractorName() {
+  try {
+    const profile = JSON.parse(localStorage.getItem('sitekit_contractor_profile') || '{}');
+    return profile.name || '';
+  } catch { return ''; }
+}
+
 function VerifyView({ onUnlock }) {
   const pin = usePin();
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const contractorName = getContractorName();
 
   const handleDigit = (d) => {
     setError(false);
@@ -307,6 +315,11 @@ function VerifyView({ onUnlock }) {
           <div style={{ ...TF, fontSize: 36, fontWeight: 700, color: C.accent, letterSpacing: '0.02em' }}>
             SITE<span style={{ color: C.text }}>KIT</span>
           </div>
+          {contractorName && (
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6, fontWeight: 500 }}>
+              {contractorName}
+            </div>
+          )}
         </div>
 
         {/* Prompt */}

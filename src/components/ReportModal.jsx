@@ -187,7 +187,15 @@ export default function ReportModal({ job, groupBy, onClose }) {
   const [contractor, setContractor] = useState(getContractorInfo);
   const [editContractor, setEditContractor] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [preparedBy, setPreparedBy] = useState(() => localStorage.getItem('sitekit_prepared_by') || '');
+  const [preparedBy, setPreparedBy] = useState(() => {
+    const saved = localStorage.getItem('sitekit_prepared_by');
+    if (saved) return saved;
+    // Auto-fill from contractor profile
+    try {
+      const profile = JSON.parse(localStorage.getItem('sitekit_contractor_profile') || '{}');
+      return profile.name || '';
+    } catch { return ''; }
+  });
 
   const handlePreparedByChange = (val) => {
     setPreparedBy(val);

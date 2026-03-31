@@ -991,6 +991,132 @@ export const api = {
     return { jobCount, itemCount, deptCount, photoCount, receiptCount, blobCount };
   },
 
+  // ── CSV Export ───────────────────────────────────────────────────────────
+
+  async exportFixturesCsv(jobId) {
+    const job = await getOne('jobs', jobId);
+    if (!job) throw new Error('Job not found');
+    const items = await getAllByIndex('items', 'jobId', jobId);
+
+    const headers = ['Item #','Material Class','Description','Vendor','Section','Qty Ordered','Qty Received','Date Received','Delivery Date','Status','Missing Parts','Damaged','Additional Orders'];
+    const escCsv = (val) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const rows = items.map(i => {
+      const rec = parseInt(i.qtyReceived || '0');
+      const ord = parseInt(i.qtyOrdered || '0');
+      let status = 'Pending';
+      if (i.damaged || i.missingParts) status = 'Issue';
+      else if (rec > 0 && ord > 0 && rec >= ord) status = 'Received';
+      else if (rec > 0) status = 'Partial';
+      return [
+        i.itemNumber, i.materialClass, i.description, i.vendor, i.section,
+        i.qtyOrdered, i.qtyReceived, i.dateReceived, i.delDate,
+        status, i.missingParts, i.damaged ? 'Yes' : 'No', i.additionalOrders,
+      ].map(escCsv).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const jobName = (job.name || 'job').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return { csv, filename: `${jobName}_fixtures.csv` };
+  },
+
+  async exportReceiptsCsv(jobId) {
+    const job = await getOne('jobs', jobId);
+    if (!job) throw new Error('Job not found');
+    const receipts = await getAllByIndex('receipts', 'jobId', jobId);
+
+    const headers = ['Store','Amount','Date','Category','Notes','Submitted'];
+    const escCsv = (val) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const rows = receipts
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      .map(r => [
+        r.store, r.amount != null ? r.amount.toFixed(2) : '0.00', r.date, r.category,
+        r.notes, r.submitted ? 'Yes' : 'No',
+      ].map(escCsv).join(','));
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const jobName = (job.name || 'job').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return { csv, filename: `${jobName}_receipts.csv` };
+  },
+
+  // ── Daily Summary ─────────────────────────────────────────────────────────
+
+  async getDailySummary(jobId) {
+    const job = await getOne('jobs', jobId);
+    if (!job) throw new Error('Job not found');
+    const items = await getAllByIndex('items', 'jobId', jobId);
+    const receipts = await getAllByIndex('receipts', 'jobId', jobId);
+    const todayStr = today();
+
+    // Fixtures received today
+    const receivedToday = items.filter(i => i.dateReceived === todayStr).length;
+    const totalItems = items.length;
+    const totalReceived = items.filter(i => {
+      const r = parseInt(i.qtyReceived || '0');
+      const o = parseInt(i.qtyOrdered || '0');
+      return r > 0 && o > 0 && r >= o;
+    }).length;
+    const pctComplete = totalItems > 0 ? Math.round((totalReceived / totalItems) * 100) : 0;
+
+    // Issues
+    const allIssueItems = items.filter(i => i.damaged || i.missingParts);
+    const newIssues = allIssueItems.filter(i => {
+      const d = i.damageReportedDate || i.missingPartsReportedDate;
+      return !d; // unreported = new
+    }).length;
+    const resolvedIssues = allIssueItems.filter(i => {
+      return (i.damaged && i.damageResolvedDate) || (i.missingParts && i.missingPartsResolvedDate);
+    }).length;
+    const unreportedIssues = allIssueItems.length - resolvedIssues - (allIssueItems.length - newIssues - resolvedIssues);
+
+    // Crew
+    let crewHours = 0;
+    let crewMemberCount = 0;
+    try {
+      const timeEntries = await getAllByIndex('time_entries', 'jobId', jobId);
+      const todayEntries = timeEntries.filter(e => e.date === todayStr);
+      crewHours = todayEntries.reduce((s, e) => s + (e.hours || 0), 0);
+      crewMemberCount = new Set(todayEntries.map(e => e.crewMemberId)).size;
+    } catch (_) {}
+
+    // Receipts today
+    const receiptsToday = receipts.filter(r => r.date === todayStr);
+    const receiptsAddedToday = receiptsToday.length;
+    const spendToday = receiptsToday.reduce((s, r) => s + (r.amount || 0), 0);
+
+    // Contractor profile from localStorage (set by user in settings)
+    let preparedBy = '';
+    try {
+      const profile = JSON.parse(localStorage.getItem('sitekit_contractor_profile') || '{}');
+      if (profile.name) preparedBy = profile.name;
+      if (profile.company) preparedBy += (preparedBy ? ' | ' : '') + profile.company;
+    } catch (_) {}
+
+    const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    const summary = [
+      `SiteKit Daily Summary \u2014 ${job.name}`,
+      dateStr,
+      '',
+      `Fixtures: ${receivedToday} received today, ${totalReceived} total (${pctComplete}% complete)`,
+      `Issues: ${newIssues} unreported, ${resolvedIssues} resolved, ${allIssueItems.length} total`,
+      `Crew: ${crewHours.toFixed(1)} hours logged by ${crewMemberCount} members`,
+      `Receipts: ${receiptsAddedToday} added, $${spendToday.toFixed(2)} total spend today`,
+    ];
+    if (preparedBy) summary.push('', `Prepared by: ${preparedBy}`);
+
+    return { text: summary.join('\n'), jobName: job.name };
+  },
+
   // ── Auth ──────────────────────────────────────────────────────────────────
 
   auth: {

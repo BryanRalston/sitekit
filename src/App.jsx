@@ -17,6 +17,7 @@ import { SkeletonList } from './components/Skeleton';
 import { api } from './api';
 import { useMobile } from './hooks/useApi';
 import { getOne, put } from './db';
+import JobOverview from './components/JobOverview';
 
 export default function App() {
   return (
@@ -25,6 +26,148 @@ export default function App() {
         <AppInner />
       </ToastProvider>
     </ErrorBoundary>
+  );
+}
+
+// ─── Job Progress Bar ──────────────────────────────────────────────────────────
+function JobProgressBar({ job }) {
+  const items = job.items || [];
+  if (items.length === 0) return null;
+
+  const totalItems = items.length;
+  const receivedItems = items.filter(i => parseInt(i.qtyReceived || '0') > 0).length;
+  const pct = Math.round((receivedItems / totalItems) * 100);
+
+  const issueCount = items.filter(i => i.damaged || i.missingParts).length;
+  const pendingCount = items.filter(i => {
+    const rec = parseInt(i.qtyReceived || '0');
+    return rec === 0 && !i.damaged && !i.missingParts;
+  }).length;
+
+  const barColor = pct > 75 ? C.green : pct > 40 ? C.blue : pct > 20 ? C.yellow : C.red;
+  const barBg = pct > 75 ? C.greenDim : pct > 40 ? C.blueDim : pct > 20 ? C.yellowDim : C.redDim;
+
+  return (
+    <div style={{ padding: '6px 22px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>
+          {receivedItems}/{totalItems} fixtures received ({pct}%)
+        </span>
+        {issueCount > 0 && (
+          <span style={{ fontSize: 10, color: C.red, fontWeight: 700 }}>
+            {issueCount} issue{issueCount !== 1 ? 's' : ''}
+          </span>
+        )}
+        {pendingCount > 0 && (
+          <span style={{ fontSize: 10, color: C.yellow }}>
+            {pendingCount} pending
+          </span>
+        )}
+      </div>
+      <div style={{
+        height: 6, borderRadius: 3, background: barBg, overflow: 'hidden',
+      }}>
+        <div style={{
+          height: '100%', borderRadius: 3, background: barColor,
+          width: `${pct}%`, transition: 'width 0.4s ease',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+function JobCompletionStats({ job }) {
+  const items = job.items || [];
+  const received = items.filter(i => {
+    const r = parseInt(i.qtyReceived || '0');
+    const o = parseInt(i.qtyOrdered || '0');
+    return r > 0 && o > 0 && r >= o;
+  });
+  if (received.length === 0) return null;
+
+  const createdDate = job.createdAt ? new Date(job.createdAt) : (job.date ? new Date(job.date + 'T00:00:00') : null);
+  if (!createdDate) return null;
+
+  const now = new Date();
+  const daysSinceCreated = Math.max(1, Math.floor((now - createdDate) / (1000 * 60 * 60 * 24)));
+  const pace = received.length / daysSinceCreated;
+  const remaining = items.length - received.length;
+  const estDays = pace > 0 ? Math.ceil(remaining / pace) : null;
+
+  return (
+    <div style={{ padding: '0 22px 6px', fontSize: 11, color: C.faint, lineHeight: 1.4 }}>
+      Day {daysSinceCreated} of remodel
+      {' | '}Avg pace: {pace.toFixed(1)} items/day
+      {estDays !== null && remaining > 0 && (
+        <>{' | '}Est. completion: {estDays} day{estDays !== 1 ? 's' : ''}</>
+      )}
+      {remaining === 0 && <>{' | '}<span style={{ color: C.green }}>Complete</span></>}
+    </div>
+  );
+}
+
+// ─── PWA Install Prompt ────────────────────────────────────────────────────────
+function PwaInstallBanner() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    // Don't show if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
+
+    // Check snooze
+    const snoozedUntil = localStorage.getItem('sitekit_pwa_snooze');
+    if (snoozedUntil && Date.now() < parseInt(snoozedUntil, 10)) return;
+
+    const handler = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  if (!deferredPrompt || dismissed) return null;
+
+  const handleInstall = async () => {
+    deferredPrompt.prompt();
+    const result = await deferredPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+    setDismissed(true);
+  };
+
+  const handleDismiss = () => {
+    // Snooze for 7 days
+    localStorage.setItem('sitekit_pwa_snooze', (Date.now() + 7 * 24 * 60 * 60 * 1000).toString());
+    setDismissed(true);
+  };
+
+  return (
+    <div style={{
+      padding: '8px 16px',
+      background: 'linear-gradient(135deg, rgba(45,212,191,0.12) 0%, rgba(45,212,191,0.06) 100%)',
+      borderBottom: `1px solid ${C.tealBorder}`,
+      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      justifyContent: 'center', flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>
+        Add SiteKit to your home screen for the best experience
+      </span>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={handleDismiss} style={{
+          background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 5,
+          color: C.muted, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+          padding: '4px 10px', fontFamily: 'inherit', minHeight: 30,
+        }}>Not Now</button>
+        <button onClick={handleInstall} style={{
+          background: C.teal, border: 'none', borderRadius: 5,
+          color: '#0d1117', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+          padding: '4px 12px', fontFamily: 'inherit', minHeight: 30,
+        }}>Install</button>
+      </div>
+    </div>
   );
 }
 
@@ -298,6 +441,7 @@ function AppInner() {
   return (
     <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.text, overflow: "hidden" }}>
       <OfflineBanner />
+      <PwaInstallBanner />
       <a href="#main-content" className="skip-link" style={{
         position: 'absolute', top: -40, left: 0, background: '#22D3EE', color: '#000',
         padding: '8px 16px', zIndex: 1000, fontSize: 14, fontWeight: 700,
@@ -365,71 +509,76 @@ function AppInner() {
         )}
 
         {!activeJobFull ? (
-          /* Welcome / No job selected */
-          <div style={{
-            flex: 1, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center", gap: 20,
-            padding: "40px 24px", textAlign: "center"
-          }}>
-            <div style={{ ...TF, fontSize: 36, fontWeight: 700, color: C.accent, letterSpacing: "0.02em" }}>
-              SITE<span style={{ color: C.text }}>KIT</span>
-            </div>
-            <div style={{ fontSize: 14, color: C.muted, maxWidth: 420, lineHeight: 1.8 }}>
-              Your jobsite command center. Import fixture lists, track deliveries,
-              flag issues, and build a photo reference library that gets smarter with every job.
-            </div>
-
+          jobs.length > 0 ? (
+            /* Multi-job overview when jobs exist but none selected */
+            <JobOverview jobs={jobs} onSelectJob={handleSelectJob} />
+          ) : (
+            /* Welcome screen — no jobs exist yet */
             <div style={{
-              display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 340, marginTop: 8
+              flex: 1, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 20,
+              padding: "40px 24px", textAlign: "center"
             }}>
-              <div style={{
-                padding: "16px 20px", background: C.card, borderRadius: 12,
-                border: `1px solid ${C.accentBorder}`, textAlign: "left"
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.accent, marginBottom: 6 }}>Step 1: Create a Job</div>
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                  {isMobile ? "Tap ☰ then " : "Click "}
-                  <strong style={{ color: C.text }}>+ New Job</strong> to set up your store remodel.
-                  Enter the store name, number, and location.
-                </div>
+              <div style={{ ...TF, fontSize: 36, fontWeight: 700, color: C.accent, letterSpacing: "0.02em" }}>
+                SITE<span style={{ color: C.text }}>KIT</span>
+              </div>
+              <div style={{ fontSize: 14, color: C.muted, maxWidth: 420, lineHeight: 1.8 }}>
+                Your jobsite command center. Import fixture lists, track deliveries,
+                flag issues, and build a photo reference library that gets smarter with every job.
               </div>
 
               <div style={{
-                padding: "16px 20px", background: C.card, borderRadius: 12,
-                border: `1px solid ${C.border}`, textAlign: "left"
+                display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 340, marginTop: 8
               }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.teal, marginBottom: 6 }}>Step 2: Import Fixtures</div>
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                  Upload your Assembly Detail PDF. SiteKit parses it automatically
-                  — vendors, sections, quantities, fixture books, delivery dates.
+                <div style={{
+                  padding: "16px 20px", background: C.card, borderRadius: 12,
+                  border: `1px solid ${C.accentBorder}`, textAlign: "left"
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.accent, marginBottom: 6 }}>Step 1: Create a Job</div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                    {isMobile ? "Tap ☰ then " : "Click "}
+                    <strong style={{ color: C.text }}>+ New Job</strong> to set up your store remodel.
+                    Enter the store name, number, and location.
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: "16px 20px", background: C.card, borderRadius: 12,
+                  border: `1px solid ${C.border}`, textAlign: "left"
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.teal, marginBottom: 6 }}>Step 2: Import Fixtures</div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                    Upload your Assembly Detail PDF. SiteKit parses it automatically
+                    — vendors, sections, quantities, fixture books, delivery dates.
+                  </div>
+                </div>
+
+                <div style={{
+                  padding: "16px 20px", background: C.card, borderRadius: 12,
+                  border: `1px solid ${C.border}`, textAlign: "left"
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 6 }}>Step 3: Track on the Jobsite</div>
+                  <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                    Mark items received, flag missing parts, document damage
+                    with photos, and generate reports for the project manager.
+                  </div>
                 </div>
               </div>
 
-              <div style={{
-                padding: "16px 20px", background: C.card, borderRadius: 12,
-                border: `1px solid ${C.border}`, textAlign: "left"
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 6 }}>Step 3: Track on the Jobsite</div>
-                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-                  Mark items received, flag missing parts, document damage
-                  with photos, and generate reports for the project manager.
-                </div>
-              </div>
+              <Btn variant="primary" size="lg" icon="+" onClick={() => setShowWelcomeNewJob(true)}
+                data-testid="get-started-btn"
+                style={{ marginTop: 8, minHeight: 50, fontSize: 16, padding: "12px 28px" }}>
+                Get Started
+              </Btn>
+
+              {showWelcomeNewJob && (
+                <NewJobModal
+                  onSave={(data) => { handleNewJob(data); setShowWelcomeNewJob(false); }}
+                  onClose={() => setShowWelcomeNewJob(false)}
+                />
+              )}
             </div>
-
-            <Btn variant="primary" size="lg" icon="＋" onClick={() => setShowWelcomeNewJob(true)}
-              data-testid="get-started-btn"
-              style={{ marginTop: 8, minHeight: 50, fontSize: 16, padding: "12px 28px" }}>
-              Get Started
-            </Btn>
-
-            {showWelcomeNewJob && (
-              <NewJobModal
-                onSave={(data) => { handleNewJob(data); setShowWelcomeNewJob(false); }}
-                onClose={() => setShowWelcomeNewJob(false)}
-              />
-            )}
-          </div>
+          )
         ) : (
           <>
             {/* Job header + tabs */}
@@ -448,6 +597,8 @@ function AppInner() {
                   {activeJobFull.date && <span>{activeJobFull.date}</span>}
                 </div>
               </div>
+              <JobProgressBar job={activeJobFull} />
+              <JobCompletionStats job={activeJobFull} />
               <nav role="navigation" aria-label="Job tabs" style={{ display: "flex", padding: "10px 22px 0", gap: 3, overflowX: "auto", alignItems: "center" }}>
                 {[
                   {

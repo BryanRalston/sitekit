@@ -8,6 +8,7 @@ import ItemModal from './ItemModal';
 import ImportModal from './ImportModal';
 import ReportModal from './ReportModal';
 import VirtualList from './VirtualList';
+import ActivityFeed from './ActivityFeed';
 import { api } from '../api';
 import { useToast } from './Toast';
 import { haptic } from '../utils/haptic';
@@ -589,6 +590,9 @@ export default function FixturesTab({ job, onRefresh }) {
         </div>}
         </div>
       )}
+
+      {/* Activity Feed */}
+      {items.length > 0 && <ActivityFeed job={job} />}
 
       {/* Toolbar */}
       {isMobile ? (
