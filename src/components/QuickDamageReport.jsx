@@ -183,12 +183,14 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return (items || []).slice(0, 5);
     const q = searchQuery.toLowerCase();
-    return (items || []).filter(item =>
+    const filtered = (items || []).filter(item =>
       (item.itemNumber || '').toLowerCase().includes(q) ||
       (item.description || '').toLowerCase().includes(q) ||
       (item.vendor || '').toLowerCase().includes(q) ||
       (item.section || '').toLowerCase().includes(q)
-    ).slice(0, 5);
+    );
+    // Group by vendor for browsability
+    return filtered;
   }, [items, searchQuery]);
 
   const handlePhotoCapture = useCallback(async (e) => {
@@ -333,18 +335,41 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
               onBlur={e => e.currentTarget.style.borderColor = C.border}
             />
           </div>
+          <div style={{ fontSize: 10, color: C.muted, fontWeight: 600 }}>
+            {searchResults.length} item{searchResults.length !== 1 ? 's' : ''}{searchQuery ? ' matching' : ' total'} — scroll to browse
+          </div>
           <div style={{
             border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden',
-            maxHeight: 260, overflowY: 'auto',
+            maxHeight: 'calc(60vh - 160px)', overflowY: 'auto',
           }}>
             {searchResults.length === 0 ? (
               <div style={{ padding: 20, textAlign: 'center', color: C.muted, fontSize: 12 }}>
                 No items found
               </div>
             ) : (
-              searchResults.map(item => (
-                <ItemSearchResult key={item.id} item={item} onSelect={handleSelectItem} />
-              ))
+              (() => {
+                // Group by vendor for easier browsing
+                const grouped = {};
+                searchResults.forEach(item => {
+                  const vendor = item.vendor || 'No Vendor';
+                  if (!grouped[vendor]) grouped[vendor] = [];
+                  grouped[vendor].push(item);
+                });
+                return Object.entries(grouped).map(([vendor, vendorItems]) => (
+                  <div key={vendor}>
+                    <div style={{
+                      padding: '6px 14px', background: C.subtleBg, borderBottom: `1px solid ${C.borderLight}`,
+                      fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase',
+                      letterSpacing: '0.05em', position: 'sticky', top: 0, zIndex: 1,
+                    }}>
+                      {vendor} ({vendorItems.length})
+                    </div>
+                    {vendorItems.map(item => (
+                      <ItemSearchResult key={item.id} item={item} onSelect={handleSelectItem} />
+                    ))}
+                  </div>
+                ));
+              })()
             )}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
