@@ -7,13 +7,13 @@ import ErrorBoundary from './components/ErrorBoundary';
 const style = document.createElement('style');
 style.textContent = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease; }
-  body { font-family: 'Nunito Sans', sans-serif; background: #0d1117; color: #e6edf3; }
+  body { font-family: 'Nunito Sans', sans-serif; background: #f5f6f8; color: #1f2937; }
   button, [role="button"] { transition: all 0.15s ease; }
   button:active, [role="button"]:active { transform: scale(0.97); }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
   input, textarea, select, button { font-family: 'Nunito Sans', sans-serif; }
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
   .fade-in { animation: fadeIn 0.2s ease-out forwards; }
@@ -36,12 +36,12 @@ style.textContent = `
   }
   .slide-up { animation: slideUp 0.25s ease-out forwards; }
   .slide-in { animation: slideIn 0.2s ease forwards; }
-  .skeleton { animation: pulse 1.5s ease-in-out infinite; background: #1c2333; border-radius: 6px; }
+  .skeleton { animation: pulse 1.5s ease-in-out infinite; background: #e5e7eb; border-radius: 6px; }
   .glass-card {
-    background: rgba(28, 35, 51, 0.7);
+    background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(48, 54, 61, 0.5);
+    border: 1px solid rgba(0, 0, 0, 0.08);
   }
   .card-hover:hover {
     box-shadow: 0 0 20px rgba(249, 115, 22, 0.08);
@@ -56,7 +56,7 @@ style.textContent = `
     left: 20%;
     width: 60%;
     height: 2px;
-    background: #f97316;
+    background: #ea580c;
     border-radius: 2px;
   }
   @media print {
