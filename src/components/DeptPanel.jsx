@@ -53,9 +53,9 @@ export default function DeptPanel({ dept, allItems, color, jobId, onUpdate, onDe
       fd.append('type', 'department');
       fd.append('departmentId', dept.id);
       if (jobId) fd.append('job_id', jobId);
-      await api.uploadPhoto(fd);
+      const newPhoto = await api.uploadPhoto(fd);
       toast.success('Photo added');
-      onRefresh();
+      onUpdate({ ...dept, photos: [...photos, newPhoto] });
     } catch (err) {
       toast.error('Failed to add photo: ' + err.message);
     }
