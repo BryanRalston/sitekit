@@ -30,11 +30,15 @@ async function exportPDF(job, items, groupBy, preparedBy) {
   if (!window.jspdf) {
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+    script.integrity = 'sha384-5MXQT3yrGpx6/FO6Z5JlMsn1xsN/OggV+b88W2CfpNqmvPfmv7JW/O8x78GzptfE';
+    script.crossOrigin = 'anonymous';
     document.head.appendChild(script);
     await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; });
 
     const script2 = document.createElement('script');
     script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js';
+    script2.integrity = 'sha384-Xl/CUCfJbzsngMp0CFxkmF0VW/8C160IsGujqeQlIhaGxKz2+JsIGORFqtCPeldF';
+    script2.crossOrigin = 'anonymous';
     document.head.appendChild(script2);
     await new Promise((resolve, reject) => { script2.onload = resolve; script2.onerror = reject; });
   }

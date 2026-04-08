@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set the worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+// Use locally vendored worker (public/vendor/pdf.worker.min.mjs) — no CDN dependency
+pdfjsLib.GlobalWorkerOptions.workerSrc = import.meta.env.BASE_URL + 'vendor/pdf.worker.min.mjs';
 
 /**
  * Extract text from a PDF file, reconstructing line structure from text spans.
