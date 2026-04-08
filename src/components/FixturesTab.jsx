@@ -102,7 +102,7 @@ export default function FixturesTab({ job, onRefresh }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
-  const [deliveryOpen, setDeliveryOpen] = useState(true);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [deliveryFilter, setDeliveryFilter] = useState(null); // null | "overdue" | "today" | "week" | "received-today"
   const [issuesFilter, setIssuesFilter] = useState(false); // show only unreported issues
   const [quickReportMode, setQuickReportMode] = useState(false);
@@ -580,7 +580,7 @@ export default function FixturesTab({ job, onRefresh }) {
             display: "grid",
             gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr",
             gap: 10, padding: isMobile ? "0 14px 10px" : "0 18px 12px",
-          }}>
+          }} className="fade-in">
           {/* Overdue */}
           <button onClick={() => { setDeliveryFilter(deliveryFilter === "overdue" ? null : "overdue"); setIssuesFilter(false); }} style={{
             padding: "12px 14px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
@@ -679,11 +679,9 @@ export default function FixturesTab({ job, onRefresh }) {
             </div>
           )}
         </div>}
+        {showDashboard && <ActivityFeed job={job} />}
         </div>
       )}
-
-      {/* Activity Feed */}
-      {items.length > 0 && <ActivityFeed job={job} />}
 
       {/* Toolbar */}
       {isMobile ? (
@@ -1055,8 +1053,8 @@ export default function FixturesTab({ job, onRefresh }) {
         </div>
       )}
 
-      {/* Section pills */}
-      {allSections.length > 0 && groupBy === "vendor" && (
+      {/* Section pills — always on desktop, on mobile only when searching */}
+      {allSections.length > 0 && groupBy === "vendor" && (!isMobile || search.trim()) && (
         <div style={{
           padding: "6px 18px", borderBottom: `1px solid ${C.borderLight}`,
           display: "flex", gap: 5, flexWrap: isMobile ? "nowrap" : "wrap",
