@@ -3,13 +3,17 @@
 
 // ─── Known Vendors (longest first for greedy matching) ──────────────────────
 const KNOWN_VENDORS = [
+  'TRINITY MANUFACTURING',
   'ENVISION (PLASTICS PLUS)',
   'CAROLINA INNOVATIONS',
   'DELUXE SYSTEMS INC',
   'PACIFIC NORTHERN',
   'AGILITY RETAIL',
+  'AGILITY Q',
   'ACME PLASTICS',
   'CROWN METAL',
+  'CROWN LIFT',
+  'MG CONCEPTS',
   'MCCUE CORP',
   'VIRA MFG.',
   'VIRA MFG',
@@ -20,9 +24,11 @@ const KNOWN_VENDORS = [
   'VASWANI',
   'KASTON',
   'CAHILL',
+  'ORORA',
   'C.A.P.',
   'C.A.P',
   'WESCO',
+  'LOEB',
   'IDX',
 ];
 
@@ -44,6 +50,7 @@ const KNOWN_CLASSES = new Set(['DGS', 'IMPORT']);
 const HEADER_PATTERNS = [
   /^Spreadsheet\s*Report/i,
   /^T\d{4}Rem/i,
+  /\d{1,2}\/\d{1,2}\/\d{4}/,     // lines with timestamps like "HG54Rkc 12/30/2025 2:33 PM"
   /^Takeoff$/i,
   /^Quantity$/i,
   /^Fixt\.?$/i,
@@ -51,13 +58,16 @@ const HEADER_PATTERNS = [
   /^Deliv$/i,
   /^Date$/i,
   /^Material\s+Class\s*Item/i,
+  /^Material\s+Class$/i,
   /^Material$/i,
   /^Class$/i,
   /^Page\s+\d+/i,
+  /^Item\s+Description/i,         // "Item Description Takeoff Quantity"
+  /^Takeoff\s+Quantity/i,
 ];
 
-// Quantity at end of line: captures "34.00E" or "34.00 E" or "1,000.00E"
-const QTY_AT_END_RE = /(\d{1,3}(?:,\d{3})*\.\d{2})\s*E?\s*$/;
+// Quantity at end of line: captures "34.00 EA", "34.00E", "34.00", "48.00 EA F24" (with trailing fixture book)
+const QTY_AT_END_RE = /(\d{1,3}(?:,\d{3})*\.\d{2})\s*(?:EA|E)?\s*([A-Z]\d{1,3}(?:\.\d{1,2})?)?\s*$/;
 
 // Fixture book: short code like G1, P85, F22, K13, L21, T41, A3.8, C81, B47.1
 const FIXTURE_BOOK_RE = /^[A-Z]\d{1,3}(?:\.\d{1,2})?$/;
@@ -318,9 +328,13 @@ export function parsePdfText(text) {
         cur.vendor = vendorInfo.vendor;
         cur.materialClass = vendorInfo.materialClass;
 
-        // Check if rest of line contains inline item data (pdfjs-dist format)
-        // e.g., "WESCO WEBM MMX A LED 2X4 RECESSED" or "AGILITY RETAIL DGS DFAI 8' IMPLIED VALANCE6.00E"
-        if (vendorInfo.rest) {
+        // Check if rest of line is a delivery date (e.g. "IDX 040726" or "LOEB 040726")
+        if (vendorInfo.rest && DEL_DATE_RE.test(vendorInfo.rest)) {
+          cur.delDate = vendorInfo.rest;
+          // fall through to set state below — don't try inline parse
+        } else if (vendorInfo.rest) {
+          // Check if rest of line contains inline item data (pdfjs-dist format)
+          // e.g., "WESCO WEBM MMX A LED 2X4 RECESSED" or "AGILITY RETAIL DGS DFAI 8' IMPLIED VALANCE6.00E"
           const inline = parseInlineItemData(vendorInfo.rest, vendorInfo.materialClass);
           if (inline && inline.itemNumber) {
             cur.materialClass = inline.materialClass || cur.materialClass;
@@ -434,6 +448,12 @@ export function parsePdfText(text) {
         continue;
       }
 
+      // Delivery date before item code (e.g. vendor on its own line, then date, then item code)
+      if (DEL_DATE_RE.test(line)) {
+        cur.delDate = line;
+        continue; // stay HAVE_VENDOR, item code expected next
+      }
+
       // Check if the line is a short all-caps word that could be a class we don't know about
       // followed by an item code on the NEXT line
       if (/^[A-Z]{1,10}$/.test(line) && line.length <= 10) {
@@ -454,6 +474,12 @@ export function parsePdfText(text) {
     }
 
     if (state === 'HAVE_CLASS') {
+      // Delivery date before item code (common in this PDF format: vendor → class → date → item)
+      if (DEL_DATE_RE.test(line)) {
+        cur.delDate = line;
+        continue; // stay HAVE_CLASS, item code expected next
+      }
+
       // Expecting: item code (alone on line) OR item# + description + qty (inline, pdfjs format)
       if (ITEM_CODE_RE.test(line)) {
         cur.itemNumber = line;
@@ -487,6 +513,7 @@ export function parsePdfText(text) {
         const descPart = line.slice(0, line.lastIndexOf(qtyMatch[1])).trim();
         if (descPart) cur.descParts.push(descPart);
         cur.qtyOrdered = qtyMatch[1];
+        if (qtyMatch[2] && !cur.fixtureBook) cur.fixtureBook = qtyMatch[2]; // e.g. "F24" trailing on qty line
         state = 'COLLECTING_DESC'; // Wait for A line, then fixture book/date
         continue;
       }
