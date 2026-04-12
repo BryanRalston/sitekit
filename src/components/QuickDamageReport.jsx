@@ -237,7 +237,7 @@ export default function QuickIssueReport({ items, onRefresh, onClose, prefilledI
         updates.damaged = true;
         updates.damagedQty = qty || '1';
         updates.damageNotes = notes || '';
-        updates.damageReportedAt = now;
+        updates.damageReported = now;
       } else if (issueType === 'missing') {
         updates.missingParts = notes || 'Missing parts';
         updates.missingPartsQty = qty || '1';
