@@ -115,6 +115,7 @@ export default function FixturesTab({ job, onRefresh }) {
   const [issueReportItem, setIssueReportItem] = useState(null); // prefilled item from swipe
   const [nicknameInput, setNicknameInput] = useState("");
   const [editingIssue, setEditingIssue] = useState(null); // { itemId, issueType }
+  const [reportItemIds, setReportItemIds] = useState(null); // null = all, Set = filtered
 
   // Load section nicknames from localStorage on mount / job change
   useEffect(() => {
@@ -1345,7 +1346,7 @@ export default function FixturesTab({ job, onRefresh }) {
           onClose={() => setShowImport(false)}
         />
       )}
-      {showReport && <ReportModal job={job} groupBy={groupBy} onClose={() => setShowReport(false)} />}
+      {showReport && <ReportModal job={job} groupBy={groupBy} onClose={() => { setShowReport(false); setReportItemIds(null); }} selectedItemIds={reportItemIds} />}
 
       {/* Quick Report floating action bar */}
       {quickReportMode && (
@@ -1360,7 +1361,13 @@ export default function FixturesTab({ job, onRefresh }) {
             {quickReportSelected.size} selected
           </span>
           <Btn variant="purple" size="sm" icon="📋" disabled={quickReportSelected.size === 0} onClick={handleQuickReportGenerate}>
-            Generate Report
+            Share Report
+          </Btn>
+          <Btn variant="blue" size="sm" icon="📑" disabled={quickReportSelected.size === 0} onClick={() => {
+            setReportItemIds(new Set(quickReportSelected));
+            setShowReport(true);
+          }}>
+            Generate PDF
           </Btn>
           <Btn variant="ghost" size="sm" onClick={() => { setQuickReportMode(false); setQuickReportSelected(new Set()); }}>
             Cancel

@@ -121,18 +121,41 @@ async function exportPDF(job, items, groupBy, preparedBy) {
     doc.text(`Issues (${issueItems.length})`, 14, startY);
     startY += 6;
 
+    // Build one row per issue type per item
+    const issueRows = [];
+    for (const item of issueItems) {
+      if (item.damaged) {
+        const qty = item.damagedQty || '';
+        const status = item.damageResolved ? 'Resolved' : item.damageReported ? `Reported ${new Date(item.damageReported).toLocaleDateString()}` : 'NOT REPORTED';
+        issueRows.push([item.itemNumber || '', (item.description || '').slice(0, 38), 'Damaged', qty, (item.damageNotes || '').slice(0, 50), status]);
+      }
+      if (item.missingParts) {
+        const qty = item.missingPartsQty || '';
+        const status = item.missingPartsResolved ? 'Resolved' : item.missingPartsReported ? `Reported ${new Date(item.missingPartsReported).toLocaleDateString()}` : 'NOT REPORTED';
+        issueRows.push([item.itemNumber || '', (item.description || '').slice(0, 38), 'Missing Parts', qty, (item.missingParts || '').slice(0, 50), status]);
+      }
+      if (item.additionalOrders) {
+        const qty = item.additionalOrdersQty || '';
+        const status = item.additionalOrdersResolved ? 'Resolved' : item.additionalOrdersReported ? `Reported ${new Date(item.additionalOrdersReported).toLocaleDateString()}` : 'NOT REPORTED';
+        issueRows.push([item.itemNumber || '', (item.description || '').slice(0, 38), 'Add. Orders', qty, (item.additionalOrders || '').slice(0, 50), status]);
+      }
+    }
+
     doc.autoTable({
       startY,
-      head: [['Item #', 'Description', 'Issue Type', 'Details']],
-      body: issueItems.map(item => [
-        item.itemNumber || '',
-        (item.description || '').slice(0, 40),
-        [item.damaged ? 'Damaged' : '', item.missingParts ? 'Missing' : '', item.additionalOrders ? 'Add. Orders' : ''].filter(Boolean).join(', '),
-        [item.damageNotes, item.missingParts, item.additionalOrders].filter(Boolean).join('; ').slice(0, 60),
-      ]),
+      head: [['Item #', 'Description', 'Issue Type', 'Qty', 'Details', 'Status']],
+      body: issueRows,
       theme: 'grid',
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [248, 81, 73], textColor: 255 },
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [248, 81, 73], textColor: 255, fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 18 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 24 },
+        3: { cellWidth: 12 },
+        4: { cellWidth: 'auto' },
+        5: { cellWidth: 30 },
+      },
       margin: { left: 14, right: 14 },
     });
   }
@@ -172,8 +195,23 @@ function saveContractorInfo(info) {
   localStorage.setItem(CONTRACTOR_KEY, JSON.stringify(info));
 }
 
-export default function ReportModal({ job, groupBy, onClose }) {
-  const items = job.items || [];
+export default function ReportModal({ job, groupBy, onClose, selectedItemIds }) {
+  const allItems = job.items || [];
+  // If selectedItemIds provided, default to filtering to those; otherwise show all
+  const [selectedOnly, setSelectedOnly] = useState(() => !!selectedItemIds && selectedItemIds.size > 0);
+  const [issuesOnly, setIssuesOnly] = useState(false);
+
+  const items = React.useMemo(() => {
+    let base = allItems;
+    if (selectedOnly && selectedItemIds && selectedItemIds.size > 0) {
+      base = base.filter(i => selectedItemIds.has(i.id));
+    }
+    if (issuesOnly) {
+      base = base.filter(i => i.damaged || i.missingParts || i.additionalOrders);
+    }
+    return base;
+  }, [allItems, selectedOnly, issuesOnly, selectedItemIds]);
+
   const received = items.filter(i => getItemStatus(i) === "received").length;
   const partial = items.filter(i => getItemStatus(i) === "partial").length;
   const issues = items.filter(i => getItemStatus(i) === "issue").length;
@@ -306,6 +344,35 @@ export default function ReportModal({ job, groupBy, onClose }) {
           />
         </div>
 
+        {/* Filter toggles */}
+        <div className="no-print" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {selectedItemIds && selectedItemIds.size > 0 && (
+            <button onClick={() => setSelectedOnly(v => !v)} style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "6px 14px",
+              borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              fontFamily: "inherit",
+              background: selectedOnly ? C.purpleDim : "transparent",
+              color: selectedOnly ? C.purple : C.muted,
+              border: `1px solid ${selectedOnly ? C.purpleBorder : C.border}`,
+            }}>
+              ☑ Selected items only ({selectedItemIds.size})
+            </button>
+          )}
+          <button onClick={() => setIssuesOnly(v => !v)} style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "6px 14px",
+            borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer",
+            fontFamily: "inherit",
+            background: issuesOnly ? C.redDim : "transparent",
+            color: issuesOnly ? C.red : C.muted,
+            border: `1px solid ${issuesOnly ? C.redBorder : C.border}`,
+          }}>
+            🔴 Issues only ({allItems.filter(i => i.damaged || i.missingParts || i.additionalOrders).length})
+          </button>
+          <span style={{ fontSize: 10, color: C.faint, marginLeft: "auto" }}>
+            Showing {items.length} of {allItems.length} items
+          </span>
+        </div>
+
         {/* Report Header + Stats */}
         <div style={{ padding: 16, background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
           <div style={{ ...TF, fontSize: 22, fontWeight: 700, color: C.text, marginBottom: 3 }}>
@@ -354,8 +421,8 @@ export default function ReportModal({ job, groupBy, onClose }) {
           </div>
         )}
 
-        {/* Items grouped */}
-        {Object.entries(grouped).map(([grp, gitems]) => (
+        {/* Items grouped — hidden when issuesOnly is active */}
+        {!issuesOnly && Object.entries(grouped).map(([grp, gitems]) => (
           <div key={grp} style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${C.border}` }}>
             <div style={{
               padding: "6px 12px",
