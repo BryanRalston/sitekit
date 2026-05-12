@@ -328,12 +328,12 @@ export default function Sidebar({ jobs, activeJobId, onSelectJob, onNewJob, onDe
         {jobs.map(job => {
           const isActive = job.id === activeJobId;
           const items = job.items || [];
-          const itemCount = job.item_count ?? items.length;
-          const issueCount = job.issue_count ?? items.filter(i => getItemStatus(i) === "issue").length;
-          const sectionCount = job.section_count ?? [...new Set(items.map(i => i.section).filter(Boolean))].length;
-          const deptCount = job.dept_count ?? (job.departments || []).length;
-          const photoCount = job.photo_count ?? (job.departments || []).reduce((a, d) => a + (d.photos || []).length, 0);
-          const donePhotos = job.done_photo_count ?? (job.departments || []).reduce((a, d) => a + (d.photos || []).filter(p => p.completed).length, 0);
+          const itemCount = job.itemCount ?? items.length;
+          const issueCount = job.issueCount ?? items.filter(i => getItemStatus(i) === "issue").length;
+          const sectionCount = job.sectionCount ?? [...new Set(items.map(i => i.section).filter(Boolean))].length;
+          const deptCount = job.deptCount ?? (job.departments || []).length;
+          const photoCount = job.photoCount ?? (job.departments || []).reduce((a, d) => a + (d.photos || []).length, 0);
+          const donePhotos = job.donePhotoCount ?? (job.departments || []).reduce((a, d) => a + (d.photos || []).filter(p => p.completed).length, 0);
 
           return (
             <div key={job.id} data-testid={`job-item-${job.id}`} onClick={() => { onSelectJob(job.id); if (onCloseMobile) onCloseMobile(); }}

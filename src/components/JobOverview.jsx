@@ -25,9 +25,9 @@ export default function JobOverview({ jobs, onSelectJob }) {
           gap: 14,
         }}>
           {sorted.map(job => {
-            const itemCount = job.item_count ?? 0;
-            const receivedCount = job.received_count ?? 0;
-            const issueCount = job.issue_count ?? 0;
+            const itemCount = job.itemCount ?? 0;
+            const receivedCount = job.receivedCount ?? 0;
+            const issueCount = job.issueCount ?? 0;
             const pct = itemCount > 0 ? Math.round((receivedCount / itemCount) * 100) : 0;
 
             const createdDate = job.createdAt ? new Date(job.createdAt) : null;
@@ -101,9 +101,9 @@ export default function JobOverview({ jobs, onSelectJob }) {
                       {daysActive} day{daysActive !== 1 ? 's' : ''} active
                     </span>
                   )}
-                  {(job.receipt_count || 0) > 0 && (
+                  {(job.receiptCount || 0) > 0 && (
                     <span style={{ fontSize: 10, color: C.faint }}>
-                      {job.receipt_count} receipt{job.receipt_count !== 1 ? 's' : ''}
+                      {job.receiptCount} receipt{job.receiptCount !== 1 ? 's' : ''}
                     </span>
                   )}
                 </div>

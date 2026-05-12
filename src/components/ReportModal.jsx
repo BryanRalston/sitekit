@@ -27,20 +27,17 @@ function exportCSV(job, items, groupBy) {
 // ─── PDF Export ────────────────────────────────────────────────────────────────
 async function exportPDF(job, items, groupBy, preparedBy) {
   // Dynamically load jsPDF + autoTable from CDN
-  if (!window.jspdf) {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
-    script.integrity = 'sha384-5MXQT3yrGpx6/FO6Z5JlMsn1xsN/OggV+b88W2CfpNqmvPfmv7JW/O8x78GzptfE';
-    script.crossOrigin = 'anonymous';
-    document.head.appendChild(script);
-    await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; });
-
-    const script2 = document.createElement('script');
-    script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js';
-    script2.integrity = 'sha384-Xl/CUCfJbzsngMp0CFxkmF0VW/8C160IsGujqeQlIhaGxKz2+JsIGORFqtCPeldF';
-    script2.crossOrigin = 'anonymous';
-    document.head.appendChild(script2);
-    await new Promise((resolve, reject) => { script2.onload = resolve; script2.onerror = reject; });
+  if (!window.jspdf || !window._sitekitAutoTableReady) {
+    const loadScript = (src) => new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Failed to load: ' + src.split('/').slice(-1)[0]));
+      document.head.appendChild(s);
+    });
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js');
+    window._sitekitAutoTableReady = true;
   }
 
   const { jsPDF } = window.jspdf;

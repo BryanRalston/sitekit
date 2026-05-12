@@ -80,13 +80,13 @@ export const api = {
       const jReceipts = receipts.filter(r => r.jobId === j.id);
       return {
         ...j,
-        item_count: jItems.length,
-        received_count: jItems.filter(i => { const r = parseInt(i.qtyReceived || '0'), o = parseInt(i.qtyOrdered || '0'); return r > 0 && o > 0 && r >= o; }).length,
-        issue_count: jItems.filter(i => i.damaged || i.missingParts).length,
-        dept_count: jDepts.length,
-        photo_count: jPhotos.length,
-        receipt_count: jReceipts.length,
-        receipt_total: jReceipts.reduce((s, r) => s + (r.amount || 0), 0),
+        itemCount: jItems.length,
+        receivedCount: jItems.filter(i => { const r = parseInt(i.qtyReceived || '0'), o = parseInt(i.qtyOrdered || '0'); return r > 0 && o > 0 && r >= o; }).length,
+        issueCount: jItems.filter(i => i.damaged || i.missingParts).length,
+        deptCount: jDepts.length,
+        photoCount: jPhotos.length,
+        receiptCount: jReceipts.length,
+        receiptTotal: jReceipts.reduce((s, r) => s + (r.amount || 0), 0),
       };
     }).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   },
@@ -403,7 +403,7 @@ export const api = {
       refPhotos = refPhotos.filter(p => !excludeDeptIds.includes(p.departmentId));
     }
 
-    // Enrich each photo with job_name, linked_count, and linked item data for filtering
+    // Enrich each photo with jobName, linkedCount, and linked item data for filtering
     refPhotos = refPhotos.map(p => {
       const linkedItems = (p.linkedItemIds || [])
         .map(lid => allItems.find(i => i.id === lid))
@@ -412,15 +412,15 @@ export const api = {
       const job = dept && dept.jobId ? jobById[dept.jobId] : null;
       return {
         ...p,
-        job_name: job ? job.name : null,
-        linked_count: linkedItems.length,
+        jobName: job ? job.name : null,
+        linkedCount: linkedItems.length,
         _linkedItems: linkedItems, // transient, used for filtering below
       };
     });
 
-    // Filter by item_number: match against photo title or any linked item's itemNumber
-    if (params.item_number) {
-      const q = params.item_number.toLowerCase();
+    // Filter by itemNumber: match against photo title or any linked item's itemNumber
+    if (params.itemNumber) {
+      const q = params.itemNumber.toLowerCase();
       refPhotos = refPhotos.filter(p =>
         (p.title && p.title.toLowerCase().includes(q)) ||
         p._linkedItems.some(i => i.itemNumber && i.itemNumber.toLowerCase().includes(q))

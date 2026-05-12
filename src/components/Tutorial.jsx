@@ -59,78 +59,88 @@ const STEPS = [
   {
     id: 'issues', target: 'issues-badge',
     title: '9. Flag Issues',
-    text: 'Missing parts, damage, or need to reorder? Flag it with a description, quantity, and photo. Tap the colored badges on any item row to edit issues inline \u2014 no modal needed.',
+    text: 'Missing parts, damage, or need to reorder? Flag it with a description, quantity, and photo when editing an item. Tap the colored badges on any item row to edit issues inline \u2014 no modal needed.',
   },
   {
     id: 'quick-report', target: null,
-    title: '10. Quick Report',
-    text: 'Need to report multiple issues at once? Tap Quick Report in the toolbar, select the items, and generate one formatted message for your PM. One tap to share via text or email.',
+    title: '10. Quick Report (Fixtures Tab)',
+    text: 'In the Fixtures tab, tap Quick Report in the toolbar to select specific items and generate a formatted PDF or text report for your PM \u2014 one tap to share.',
   },
   {
     id: 'tab-issues', target: 'tab-issues',
     title: '11. Issues Dashboard',
-    text: 'The Issues tab shows all missing parts, damage, and additional orders across every fixture. Edit quantities inline, filter by unreported, share in bulk, track resolution.',
+    text: 'The Issues tab shows every missing part, damaged item, and additional order across your job. Edit quantities inline, filter to unreported only, and track resolution status.',
+  },
+  {
+    id: 'issues-photos', target: null,
+    title: '12. Add Photos from Issues Tab',
+    text: 'Each issue row has \ud83d\udcf7 Camera and \ud83d\uddbc Library buttons \u2014 take a new photo on the spot or choose one from your phone. Photos save directly to that issue and appear in the report.',
+  },
+  {
+    id: 'issues-report', target: null,
+    title: '13. Create Issue Report',
+    text: 'Tap \u201cCreate Report\u201d in the Issues tab to enter selection mode. Tap individual issues to select them, then choose Share Text or Share PDF. The PDF embeds any damage photos automatically \u2014 one document your PM can actually use.',
   },
 
   // ── Department Photos ──
   {
     id: 'tab-visual', target: 'tab-visual', interactive: true, triggerClick: true,
-    title: '12. Department Photos',
+    title: '14. Department Photos',
     text: 'Create departments for each area of the store. Take photos as you install \u2014 build a visual reference that carries forward to future jobs.',
   },
 
   // ── Receipts ──
   {
     id: 'tab-receipts', target: 'tab-receipts', interactive: true, triggerClick: true,
-    title: '13. Receipt Tracking',
+    title: '15. Receipt Tracking',
     text: 'Track every purchase with photos. Take a picture of your receipt, tap Scan Receipt, and SiteKit reads the total, date, and store automatically. Categorize as Materials, Tools, Gas, Meals, and more.',
   },
   {
     id: 'gas-tracking', target: null,
-    title: '14. Gas & Expense Views',
+    title: '16. Gas & Expense Views',
     text: 'Toggle to Gas Only for gas-specific stats \u2014 total spend, fill-ups, average per fill. Filter by week or month. Generate printable receipt reports for your PM.',
   },
 
   // ── Crew Hours ──
   {
     id: 'tab-crew', target: 'tab-crew', interactive: true, triggerClick: true,
-    title: '15. Crew Hours',
+    title: '17. Crew Hours',
     text: 'Add your crew, set daily hour targets, and log hours on the weekly grid. The summary card shows available vs. logged hours with shortage alerts.',
   },
 
   // ── Reports & Tools ──
   {
     id: 'report', target: 'report',
-    title: '16. Reports',
+    title: '18. Reports',
     text: 'Generate reports grouped by vendor or section with a "Prepared By" field. Print directly or share with your project manager. Receipt reports include photo thumbnails.',
   },
   {
     id: 'global-search', target: 'global-search',
-    title: '17. Search Everything',
+    title: '19. Search Everything',
     text: 'Search across fixtures, departments, and receipts all at once. Tap \uD83D\uDD0D or press Ctrl+K. Section nicknames are searchable too.',
   },
 
   // ── Data Safety ──
   {
     id: 'offline', target: null,
-    title: '18. Works Offline',
+    title: '20. Works Offline',
     text: "No signal on the jobsite? No problem. SiteKit saves everything on your device. A yellow banner shows when you\u2019re offline \u2014 your data is safe.",
   },
   {
     id: 'backup', target: 'backup',
-    title: '19. Back Up Your Data',
+    title: '21. Back Up Your Data',
     text: 'All data lives on this device. Download a backup regularly \u2014 SiteKit reminds you every 7 days. Backups include all photos and can be restored on any device.',
   },
 
   // ── Finishing Up ──
   {
     id: 'feedback', target: 'feedback-btn',
-    title: '20. Send Feedback',
+    title: '22. Send Feedback',
     text: 'See something that could be better? The \uD83D\uDCAC button is always there. Bug reports, feature ideas, anything \u2014 it goes straight to the development team.',
   },
   {
     id: 'lock', target: 'lock',
-    title: '21. Lock Your App',
+    title: '23. Lock Your App',
     text: 'Lock the app when you\u2019re done. Your PIN is securely hashed \u2014 safe even on a shared device. Change it anytime from the sidebar.',
   },
 

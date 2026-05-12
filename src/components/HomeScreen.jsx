@@ -186,8 +186,8 @@ function SmartNotifications({ allJobData, jobs, onSelectJob }) {
       const jd = allJobData[i];
       const job = jobs[i];
       if (!job) continue;
-      const itemCount = job.item_count ?? (jd.items || []).length;
-      const receivedCount = job.received_count ?? (jd.items || []).filter(it => {
+      const itemCount = job.itemCount ?? (jd.items || []).length;
+      const receivedCount = job.receivedCount ?? (jd.items || []).filter(it => {
         const r = parseInt(it.qtyReceived || '0');
         const o = parseInt(it.qtyOrdered || '0');
         return r > 0 && o > 0 && r >= o;
@@ -426,8 +426,8 @@ function ActiveJobsGrid({ jobs, allJobData, onSelectJob, onNewJob }) {
   useEffect(() => {
     for (let i = 0; i < sorted.length; i++) {
       const job = sorted[i];
-      const itemCount = job.item_count ?? 0;
-      const receivedCount = job.received_count ?? 0;
+      const itemCount = job.itemCount ?? 0;
+      const receivedCount = job.receivedCount ?? 0;
       if (itemCount > 0 && receivedCount >= itemCount) {
         const celebKey = `sitekit_celebrated_${job.id}`;
         if (!localStorage.getItem(celebKey)) {
@@ -461,9 +461,9 @@ function ActiveJobsGrid({ jobs, allJobData, onSelectJob, onNewJob }) {
         gap: 12,
       }}>
         {sorted.map(job => {
-          const itemCount = job.item_count ?? 0;
-          const receivedCount = job.received_count ?? 0;
-          const issueCount = job.issue_count ?? 0;
+          const itemCount = job.itemCount ?? 0;
+          const receivedCount = job.receivedCount ?? 0;
+          const issueCount = job.issueCount ?? 0;
           const pct = itemCount > 0 ? Math.round((receivedCount / itemCount) * 100) : 0;
           const ringColor = pct > 75 ? C.green : pct > 40 ? C.blue : pct > 20 ? C.yellow : C.red;
 
@@ -531,9 +531,9 @@ function ActiveJobsGrid({ jobs, allJobData, onSelectJob, onNewJob }) {
                         {issueCount} issue{issueCount !== 1 ? 's' : ''}
                       </span>
                     )}
-                    {(job.receipt_count || 0) > 0 && (
+                    {(job.receiptCount || 0) > 0 && (
                       <span style={{ fontSize: 10, color: C.faint }}>
-                        {job.receipt_count} receipt{job.receipt_count !== 1 ? 's' : ''}
+                        {job.receiptCount} receipt{job.receiptCount !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>

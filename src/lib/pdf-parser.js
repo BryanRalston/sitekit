@@ -8,7 +8,10 @@ const KNOWN_VENDORS = [
   'CAROLINA INNOVATIONS',
   'DELUXE SYSTEMS INC',
   'PACIFIC NORTHERN',
+  'MATWORKS',
+  'FLEXIBLE',
   'AGILITY RETAIL',
+  'AGILITY GRID',
   'AGILITY Q',
   'ACME PLASTICS',
   'CROWN METAL',
@@ -66,8 +69,10 @@ const HEADER_PATTERNS = [
   /^Takeoff\s+Quantity/i,
 ];
 
-// Quantity at end of line: captures "34.00 EA", "34.00E", "34.00", "48.00 EA F24" (with trailing fixture book)
-const QTY_AT_END_RE = /(\d{1,3}(?:,\d{3})*\.\d{2})\s*(?:EA|E)?\s*([A-Z]\d{1,3}(?:\.\d{1,2})?)?\s*$/;
+// Quantity at end of line: captures "34.00 EA", "34.00E", "34.00", "48.00 EA F24" (with trailing fixture book),
+// "2.00 051826" or "1.00 W6.13 051826" (with trailing 6-digit delivery date),
+// and "1.00 C81 - C85 052626" (with fixture book range — second book is consumed but not captured)
+const QTY_AT_END_RE = /(\d{1,3}(?:,\d{3})*\.\d{2})\s*(?:EA|E)?\s*([A-Z]\d{1,3}(?:\.\d{1,2})?)?(?:\s*-\s*[A-Z]\d{1,3}(?:\.\d{1,2})?)?\s*(\d{6})?\s*$/;
 
 // Fixture book: short code like G1, P85, F22, K13, L21, T41, A3.8, C81, B47.1
 const FIXTURE_BOOK_RE = /^[A-Z]\d{1,3}(?:\.\d{1,2})?$/;
@@ -137,16 +142,12 @@ function parseInlineItemData(text, existingClass) {
   let materialClass = existingClass || '';
   let startIdx = 0;
 
-  // If no class yet, check if first token looks like a class (short all-caps, not an item code pattern
-  // that has description after it)
-  if (!materialClass && tokens.length >= 2 && /^[A-Z]{2,6}$/.test(tokens[0]) && ITEM_CODE_RE.test(tokens[0])) {
-    // First token could be material class OR item number
-    // Check if second token is also an item code — if so, first is class, second is item
-    if (tokens.length >= 3 && ITEM_CODE_RE.test(tokens[1])) {
-      // Two consecutive item-code-like tokens: first is likely class, second is item#
-      materialClass = tokens[0];
-      startIdx = 1;
-    }
+  // Only treat first token as material class if it's a KNOWN class (DGS, IMPORT).
+  // Generic "two consecutive item-code-like tokens" is too aggressive — false matches like
+  // "WEBM MMX ..." would steal the real item number.
+  if (!materialClass && tokens.length >= 2 && KNOWN_CLASSES.has(tokens[0].toUpperCase())) {
+    materialClass = tokens[0].toUpperCase();
+    startIdx = 1;
   }
 
   // Now tokens[startIdx] should be the item number
@@ -156,16 +157,20 @@ function parseInlineItemData(text, existingClass) {
   const itemNumber = tokens[startIdx];
   const remaining = tokens.slice(startIdx + 1).join(' ');
 
-  // Check if remaining has a qty at the end
+  // Check if remaining has qty (+optional fixture book +optional delivery date) at the end
   const qtyMatch = remaining.match(QTY_AT_END_RE);
   let description = remaining;
   let qtyOrdered = '';
+  let fixtureBook = '';
+  let delDate = '';
   if (qtyMatch) {
     description = remaining.slice(0, remaining.lastIndexOf(qtyMatch[1])).trim();
     qtyOrdered = qtyMatch[1];
+    if (qtyMatch[2]) fixtureBook = qtyMatch[2];
+    if (qtyMatch[3]) delDate = qtyMatch[3];
   }
 
-  return { materialClass, itemNumber, description, qtyOrdered };
+  return { materialClass, itemNumber, description, qtyOrdered, fixtureBook, delDate };
 }
 
 /**
@@ -340,6 +345,8 @@ export function parsePdfText(text) {
             cur.materialClass = inline.materialClass || cur.materialClass;
             cur.itemNumber = inline.itemNumber;
             if (inline.description) cur.descParts.push(inline.description);
+            if (inline.fixtureBook) cur.fixtureBook = inline.fixtureBook;
+            if (inline.delDate) cur.delDate = inline.delDate;
             if (inline.qtyOrdered) {
               cur.qtyOrdered = inline.qtyOrdered;
               state = 'COLLECTING_DESC';
@@ -425,6 +432,51 @@ export function parsePdfText(text) {
         continue;
       }
 
+      // If line is itself a new full vendor (different from cur.vendor), the previous vendor was
+      // orphaned (no item captured). Drop it and switch.
+      if (vendorInfo && vendorInfo.vendor !== cur.vendor) {
+        skipped.push(`[orphan vendor: ${cur.vendor}]`);
+        resetCur();
+        cur.vendor = vendorInfo.vendor;
+        cur.materialClass = vendorInfo.materialClass;
+        if (vendorInfo.rest && DEL_DATE_RE.test(vendorInfo.rest)) {
+          cur.delDate = vendorInfo.rest;
+          state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        } else if (vendorInfo.rest) {
+          const inline = parseInlineItemData(vendorInfo.rest, vendorInfo.materialClass);
+          if (inline && inline.itemNumber) {
+            cur.materialClass = inline.materialClass || cur.materialClass;
+            cur.itemNumber = inline.itemNumber;
+            if (inline.description) cur.descParts.push(inline.description);
+            if (inline.fixtureBook) cur.fixtureBook = inline.fixtureBook;
+            if (inline.delDate) cur.delDate = inline.delDate;
+            if (inline.qtyOrdered) {
+              cur.qtyOrdered = inline.qtyOrdered;
+              state = 'COLLECTING_DESC';
+            } else {
+              state = 'HAVE_ITEM';
+            }
+          } else {
+            state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+          }
+        } else {
+          state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        }
+        continue;
+      }
+
+      // Partial vendor (e.g., "AGILITY RETAIL\nDGS" mid-block)
+      const partialInVendor = tryPartialVendorMatch(i);
+      if (partialInVendor && partialInVendor.vendor !== cur.vendor) {
+        skipped.push(`[orphan vendor: ${cur.vendor}]`);
+        i = partialInVendor.consumeToIdx;
+        resetCur();
+        cur.vendor = partialInVendor.vendor;
+        cur.materialClass = partialInVendor.materialClass;
+        state = partialInVendor.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        continue;
+      }
+
       // Otherwise, treat as item code (no material class for this vendor)
       if (ITEM_CODE_RE.test(line) && line.trim().split(/\s+/).length === 1) {
         // Single item code on its own line
@@ -439,6 +491,8 @@ export function parsePdfText(text) {
         cur.materialClass = inlineFromVendor.materialClass || cur.materialClass;
         cur.itemNumber = inlineFromVendor.itemNumber;
         if (inlineFromVendor.description) cur.descParts.push(inlineFromVendor.description);
+        if (inlineFromVendor.fixtureBook) cur.fixtureBook = inlineFromVendor.fixtureBook;
+        if (inlineFromVendor.delDate) cur.delDate = inlineFromVendor.delDate;
         if (inlineFromVendor.qtyOrdered) {
           cur.qtyOrdered = inlineFromVendor.qtyOrdered;
           state = 'COLLECTING_DESC';
@@ -480,17 +534,63 @@ export function parsePdfText(text) {
         continue; // stay HAVE_CLASS, item code expected next
       }
 
+      // If line is itself a new vendor, current vendor+class was orphaned. Switch.
+      if (vendorInfo && vendorInfo.vendor !== cur.vendor) {
+        skipped.push(`[orphan vendor: ${cur.vendor}, class: ${cur.materialClass}]`);
+        resetCur();
+        cur.vendor = vendorInfo.vendor;
+        cur.materialClass = vendorInfo.materialClass;
+        if (vendorInfo.rest && DEL_DATE_RE.test(vendorInfo.rest)) {
+          cur.delDate = vendorInfo.rest;
+          state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        } else if (vendorInfo.rest) {
+          const inline = parseInlineItemData(vendorInfo.rest, vendorInfo.materialClass);
+          if (inline && inline.itemNumber) {
+            cur.materialClass = inline.materialClass || cur.materialClass;
+            cur.itemNumber = inline.itemNumber;
+            if (inline.description) cur.descParts.push(inline.description);
+            if (inline.fixtureBook) cur.fixtureBook = inline.fixtureBook;
+            if (inline.delDate) cur.delDate = inline.delDate;
+            if (inline.qtyOrdered) {
+              cur.qtyOrdered = inline.qtyOrdered;
+              state = 'COLLECTING_DESC';
+            } else {
+              state = 'HAVE_ITEM';
+            }
+          } else {
+            state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+          }
+        } else {
+          state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        }
+        continue;
+      }
+
+      // Partial vendor mid-block (e.g., "AGILITY RETAIL\nDGS" while in IDX HAVE_CLASS)
+      const partialInClass = tryPartialVendorMatch(i);
+      if (partialInClass && partialInClass.vendor !== cur.vendor) {
+        skipped.push(`[orphan vendor: ${cur.vendor}, class: ${cur.materialClass}]`);
+        i = partialInClass.consumeToIdx;
+        resetCur();
+        cur.vendor = partialInClass.vendor;
+        cur.materialClass = partialInClass.materialClass;
+        state = partialInClass.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        continue;
+      }
+
       // Expecting: item code (alone on line) OR item# + description + qty (inline, pdfjs format)
       if (ITEM_CODE_RE.test(line)) {
         cur.itemNumber = line;
         state = 'HAVE_ITEM';
         continue;
       }
-      // Try inline parsing: "CONR 96"LWR RETAINER MILL 34.00 E"
+      // Try inline parsing: "CONR 96"LWR RETAINER MILL 2.00 051826"
       const inlineFromClass = parseInlineItemData(line, cur.materialClass);
       if (inlineFromClass && inlineFromClass.itemNumber) {
         cur.itemNumber = inlineFromClass.itemNumber;
         if (inlineFromClass.description) cur.descParts.push(inlineFromClass.description);
+        if (inlineFromClass.fixtureBook) cur.fixtureBook = inlineFromClass.fixtureBook;
+        if (inlineFromClass.delDate) cur.delDate = inlineFromClass.delDate;
         if (inlineFromClass.qtyOrdered) {
           cur.qtyOrdered = inlineFromClass.qtyOrdered;
           state = 'COLLECTING_DESC';
@@ -514,6 +614,7 @@ export function parsePdfText(text) {
         if (descPart) cur.descParts.push(descPart);
         cur.qtyOrdered = qtyMatch[1];
         if (qtyMatch[2] && !cur.fixtureBook) cur.fixtureBook = qtyMatch[2]; // e.g. "F24" trailing on qty line
+        if (qtyMatch[3] && !cur.delDate) cur.delDate = qtyMatch[3];          // e.g. "051826" trailing on qty line
         state = 'COLLECTING_DESC'; // Wait for A line, then fixture book/date
         continue;
       }
@@ -552,7 +653,30 @@ export function parsePdfText(text) {
         finalizeItem();
         cur.vendor = vendorInfo.vendor;
         cur.materialClass = vendorInfo.materialClass;
-        state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        // Parse any inline item data on the rest of the vendor line
+        if (vendorInfo.rest && DEL_DATE_RE.test(vendorInfo.rest)) {
+          cur.delDate = vendorInfo.rest;
+          state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        } else if (vendorInfo.rest) {
+          const inline = parseInlineItemData(vendorInfo.rest, vendorInfo.materialClass);
+          if (inline && inline.itemNumber) {
+            cur.materialClass = inline.materialClass || cur.materialClass;
+            cur.itemNumber = inline.itemNumber;
+            if (inline.description) cur.descParts.push(inline.description);
+            if (inline.fixtureBook) cur.fixtureBook = inline.fixtureBook;
+            if (inline.delDate) cur.delDate = inline.delDate;
+            if (inline.qtyOrdered) {
+              cur.qtyOrdered = inline.qtyOrdered;
+              state = 'COLLECTING_DESC';
+            } else {
+              state = 'HAVE_ITEM';
+            }
+          } else {
+            state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+          }
+        } else {
+          state = vendorInfo.materialClass ? 'HAVE_CLASS' : 'HAVE_VENDOR';
+        }
         continue;
       }
 

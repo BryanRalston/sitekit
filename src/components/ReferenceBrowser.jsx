@@ -38,7 +38,7 @@ export default function ReferenceBrowser({ currentJobId, onClose }) {
     setLoading(true);
     try {
       const params = {};
-      if (filterItem) params.item_number = filterItem;
+      if (filterItem) params.itemNumber = filterItem;
       if (filterVendor) params.vendor = filterVendor;
       if (filterSection) params.section = filterSection;
       const result = await api.getReferenceLibrary(params);
@@ -117,12 +117,12 @@ export default function ReferenceBrowser({ currentJobId, onClose }) {
                         padding: "2px 6px", fontSize: 9, fontWeight: 700
                       }}>✓ Done</div>
                     )}
-                    {photo.job_name && (
+                    {photo.jobName && (
                       <div style={{
                         position: "absolute", bottom: 0, left: 0, right: 0,
                         padding: "4px 8px", background: "rgba(0,0,0,0.65)",
                         fontSize: 9, color: C.muted
-                      }}>{photo.job_name}</div>
+                      }}>{photo.jobName}</div>
                     )}
                   </div>
                   <div style={{ padding: "8px 10px" }}>
@@ -132,9 +132,9 @@ export default function ReferenceBrowser({ currentJobId, onClose }) {
                     }}>
                       {photo.title || "Untitled"}
                     </div>
-                    {photo.linked_count > 0 && (
+                    {photo.linkedCount > 0 && (
                       <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
-                        {photo.linked_count} fixtures linked
+                        {photo.linkedCount} fixtures linked
                       </div>
                     )}
                   </div>

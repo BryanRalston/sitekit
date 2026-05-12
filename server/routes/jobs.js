@@ -126,6 +126,12 @@ router.put('/api/jobs/:id', (req, res) => {
     }
 
     const { name, store, store_number, location, file_ref, date } = req.body;
+    if (name !== undefined && !name) {
+      return res.status(400).json({ error: 'name cannot be empty' });
+    }
+    if (store !== undefined && !store) {
+      return res.status(400).json({ error: 'store cannot be empty' });
+    }
     run(
       `UPDATE jobs SET
         name = ?, store = ?, store_number = ?, location = ?, file_ref = ?, date = ?,
