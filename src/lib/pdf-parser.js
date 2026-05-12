@@ -744,6 +744,22 @@ export function parsePdfText(text) {
       // Might be additional description that came after qty (rare)
       // Just finalize
       finalizeItem();
+
+      // Check if line looks like a section header (descriptive label between items).
+      // Examples: "TJ Grey Bumper Standard Qty", "MMX & Sierra Conveyor", "5' Office Countertop Sections"
+      const upperLine = line.toUpperCase().trim();
+      const looksLikeSectionHeader =
+        !VENDOR_PREFIXES[upperLine] &&
+        !ITEM_CODE_RE.test(line) &&
+        !FIXTURE_BOOK_RE.test(line) &&
+        !DEL_DATE_RE.test(line) &&
+        (/[a-z]/.test(line) || (line.length > 10 && line.length < 80 && line.includes(' ')));
+      if (looksLikeSectionHeader) {
+        sectionBuffer = line;
+        sectionAccumulating = true;
+        continue;
+      }
+
       // And this line might be something else — try to handle it
       if (line.length > 3) skipped.push(line);
       continue;
