@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sitekit-v51';
+const CACHE_NAME = 'sitekit-v52';
 const BASE = '/sitekit/';
 
 // Assets to pre-cache (core shell)
